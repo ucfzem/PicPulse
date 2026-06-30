@@ -319,6 +319,7 @@
           const stack = [start];
           let count = 0;
           let totalHue = 0;
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
           while (stack.length) {
             const idx = stack.pop();
             if (idx < 0 || idx >= totalPixels || visited[idx] || !brightMask[idx]) continue;
@@ -327,36 +328,45 @@
             totalHue += hue[idx];
             const x = idx % width;
             const y = Math.floor(idx / width);
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
             if (x > 0) stack.push(idx - 1);
             if (x < width - 1) stack.push(idx + 1);
             if (y > 0) stack.push(idx - width);
             if (y < height - 1) stack.push(idx + width);
           }
-          return { count, totalHue };
+          return { count, totalHue, minX, maxX, minY, maxY };
         }
 
         for (let i = 0; i < totalPixels; i++) {
           if (!visited[i] && brightMask[i]) {
-            const { count, totalHue } = floodFill(i);
-            if (count >= minRegionArea) {
+            const { count, totalHue, minX, maxX, minY, maxY } = floodFill(i);
+            if (count >= minRegionPixels) {
               const meanHue = totalHue / count;
               const isMagenta = meanHue >= 280 && meanHue <= 330;
-              regions.push({ area: count, meanHue, isMagenta });
+              const bw = maxX - minX + 1;
+              const bh = maxY - minY + 1;
+              const bboxArea = bw * bh;
+              const fillRatio = bboxArea > 0 ? count / bboxArea : 0;
+              const aspectRatio = Math.max(bw, bh) / Math.max(1, Math.min(bw, bh));
+              const isCircularBlob = fillRatio > 0.55 && aspectRatio < 1.8;
+              regions.push({ area: count, meanHue, isMagenta, isCircularBlob });
             }
           }
         }
 
-        const largeRegions = regions.filter(r => r.area > largeRegionArea).length;
+        const circularBlobs = regions.filter(r => r.area > largeRegionPixels && r.isCircularBlob).length;
         const magentaRegions = regions.filter(r => r.isMagenta).length;
 
         let score = 0;
-        if (brightRatio > 0.02) score += 0.2;
-        if (largeRegions >= 2) score += 0.3;
-        if (largeRegions >= 4) score += 0.2;
-        if (magentaRegions >= 1) score += 0.3;
+        if (circularBlobs >= 1) score += 0.3;
+        if (circularBlobs >= 2) score += 0.3;
+        if (magentaRegions >= 1) score += 0.4;
         score = Math.min(score, 1);
 
-        return { hasFlare: score >= threshold, score, brightRatio, brightRegionCount: largeRegions };
+        return { hasFlare: score >= threshold, score, brightRatio, brightRegionCount: circularBlobs };
       }
 
       // Clean label
