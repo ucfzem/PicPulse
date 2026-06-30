@@ -510,6 +510,13 @@
         return c;
       }
 
+      function withTimeout(promise, ms, label) {
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms))
+        ]);
+      }
+
       // Process all images
       async function processImages() {
         if (isProcessing || !images.length) return;
@@ -559,7 +566,7 @@
             smallCanvas.height = 224;
             const smallCtx = smallCanvas.getContext('2d');
             smallCtx.drawImage(canvas, 0, 0, 224, 224);
-            const predictions = await model.classify(smallCanvas);
+            const predictions = await withTimeout(model.classify(smallCanvas), 10000, 'Classification');
             smallCanvas.width = 0;
             smallCanvas.height = 0;
 
@@ -573,7 +580,7 @@
             if (useOcr) {
               try {
                 const ocrCanvas = scaleCanvas(canvas, 1200);
-                const ocrResult = await ocrWorker.recognize(ocrCanvas);
+                const ocrResult = await withTimeout(ocrWorker.recognize(ocrCanvas), 15000, 'OCR');
                 if (ocrCanvas !== canvas) { ocrCanvas.width = 0; ocrCanvas.height = 0; }
                 const text = ocrResult.data.text.trim();
                 ocrConfidence = ocrResult.data.confidence;
