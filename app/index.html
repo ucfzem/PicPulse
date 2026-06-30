@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PicPulse Web - Image Analyzer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.21.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #f0f0f0; line-height: 1.6; min-height: 100vh; }
+    .container { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
+    header { text-align: center; padding: 2rem 0 1.5rem; }
+    .logo { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.03em; }
+    .tagline { color: #888; font-size: 0.95rem; }
+    .status-bar { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
+    .badge { background: #1a1a2e; color: #a855f7; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; border: 1px solid #a855f733; }
+    .badge.ready { border-color: #22c55e33; color: #4ade80; }
+    .badge.error { border-color: #ef444433; color: #f87171; }
+    .drop-zone { border: 2px dashed #333; border-radius: 12px; padding: 2.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s; margin: 1rem 0; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #a855f7; background: #1a1a2e; }
+    .drop-zone.has-images { border-style: solid; border-color: #22c55e55; padding: 1rem; }
+    .drop-zone-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .drop-zone-text { color: #888; font-size: 0.9rem; }
+    .options { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; padding: 1rem; background: #111; border-radius: 10px; border: 1px solid #222; }
+    .options label { display: flex; align-items: center; gap: 0.5rem; color: #ccc; font-size: 0.9rem; cursor: pointer; }
+    .options input[type="checkbox"] { accent-color: #a855f7; width: 16px; height: 16px; }
+    .options input[type="range"] { accent-color: #a855f7; width: 100px; }
+    .options .range-label { color: #888; font-size: 0.8rem; min-width: 2.5rem; text-align: right; }
+    .btn { padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #a855f7); color: white; }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 15px #a855f755; }
+    .btn-secondary { background: #222; color: #f0f0f0; border: 1px solid #444; }
+    .btn-secondary:hover:not(:disabled) { border-color: #a855f7; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover:not(:disabled) { background: #ef4444; }
+    .actions { display: flex; gap: 0.75rem; justify-content: center; margin: 1rem 0; flex-wrap: wrap; }
+    .progress-section { margin: 1rem 0; display: none; }
+    .progress-section.active { display: block; }
+    .progress-bar { height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin: 0.5rem 0; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); border-radius: 3px; width: 0%; transition: width 0.3s; }
+    .progress-text { color: #888; font-size: 0.85rem; text-align: center; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .card { background: #111; border: 1px solid #222; border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
+    .card:hover { border-color: #a855f7aa; }
+    .card-img { width: 100%; height: 160px; object-fit: cover; display: block; background: #1a1a2e; }
+    .card-body { padding: 0.6rem; }
+    .card-title { font-size: 0.85rem; font-weight: 600; color: #f0f0f0; word-break: break-all; }
+    .card-subtitle { font-size: 0.75rem; color: #888; margin-top: 0.2rem; }
+    .card-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; margin-top: 0.3rem; }
+    .tag-flare { background: #7c2d1233; color: #fb923c; border: 1px solid #7c2d1255; }
+    .tag-ocr { background: #1e3a5f33; color: #60a5fa; border: 1px solid #1e3a5f55; }
+    .tag-ai { background: #2d1b5e33; color: #a78bfa; border: 1px solid #2d1b5e55; }
+    .card-new-name { font-size: 0.8rem; color: #4ade80; word-break: break-all; }
+    .card-old-name { font-size: 0.7rem; color: #f87171; text-decoration: line-through; word-break: break-all; }
+    .summary { background: #111; border: 1px solid #222; border-radius: 10px; padding: 1rem; margin: 1rem 0; display: none; }
+    .summary.active { display: block; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; }
+    .stat-label { font-size: 0.75rem; color: #888; }
+    .stat-total .stat-value { color: #f0f0f0; }
+    .stat-renamed .stat-value { color: #4ade80; }
+    .stat-flare .stat-value { color: #fb923c; }
+    .stat-errors .stat-value { color: #f87171; }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #444; border-top-color: #a855f7; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.3rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+    .back-link { display: inline-block; color: #a855f7; text-decoration: none; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .back-link:hover { text-decoration: underline; }
+    .preview-row { display: flex; gap: 1rem; align-items: flex-start; margin: 0.5rem 0; padding: 0.5rem; background: #0d0d0d; border-radius: 8px; border: 1px solid #222; }
+    .preview-row img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+    .preview-row .info { flex: 1; min-width: 0; }
+    .preview-row .info .name { font-size: 0.8rem; color: #4ade80; }
+    .preview-row .info .detail { font-size: 0.7rem; color: #888; }
+    @media (max-width: 600px) { .gallery { grid-template-columns: 1fr 1fr; } .card-img { height: 120px; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/PicPulse" class="back-link">&larr; Back to PicPulse</a>
+      <div class="logo">PicPulse Web</div>
+      <div class="tagline">AI Image Analyzer — runs entirely in your browser</div>
+      <div class="status-bar">
+        <span id="modelStatus" class="badge">Model: loading...</span>
+        <span id="ocrStatus" class="badge">OCR: loading...</span>
+        <span id="totalBadge" class="badge hidden">Images: 0</span>
+      </div>
+    </header>
+
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-zone-icon">&#128247;</div>
+      <div class="drop-zone-text"><strong>Drop images here</strong> or click to browse</div>
+      <div style="color:#555;font-size:0.8rem;margin-top:0.3rem;">JPEG, PNG, GIF, BMP, WEBP</div>
+    </div>
+
+    <div class="options">
+      <label><input type="checkbox" id="optFlareTag" checked> Add flare_ tag</label>
+      <label><input type="checkbox" id="optOcr" checked> OCR (text detection)</label>
+      <label style="flex:1;min-width:120px;">
+        <span style="color:#888;font-size:0.8rem;">Flare threshold</span>
+        <input type="range" id="flareThreshold" min="0.1" max="0.9" step="0.05" value="0.3">
+        <span class="range-label" id="flareThresholdLabel">0.30</span>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnProcess" disabled>Process Images</button>
+      <button class="btn btn-secondary" id="btnClear">Clear All</button>
+    </div>
+
+    <div class="progress-section" id="progressSection">
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">Ready</div>
+    </div>
+
+    <div class="summary" id="summary">
+      <h3 style="font-size:1rem;color:#f0f0f0;">Results</h3>
+      <div class="summary-grid">
+        <div class="stat stat-total"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
+        <div class="stat stat-renamed"><div class="stat-value" id="statRenamed">0</div><div class="stat-label">Renamed</div></div>
+        <div class="stat stat-flare"><div class="stat-value" id="statFlare">0</div><div class="stat-label">Flare</div></div>
+        <div class="stat stat-errors"><div class="stat-value" id="statErrors">0</div><div class="stat-label">Errors</div></div>
+      </div>
+      <div style="margin-top:0.75rem;font-size:0.8rem;color:#888;" id="summaryNote"></div>
+    </div>
+
+    <div id="gallery" class="gallery"></div>
+
+    <footer style="text-align:center;padding:2rem 0;color:#555;font-size:0.8rem;border-top:1px solid #222;margin-top:2rem;">
+      Powered by TensorFlow.js, Tesseract.js &middot; <a href="https://github.com/ucfzem/PicPulse" style="color:#a855f7;text-decoration:none;">GitHub</a>
+    </footer>
+  </div>
+
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+  <script>
+    (function() {
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('fileInput');
+      const gallery = document.getElementById('gallery');
+      const btnProcess = document.getElementById('btnProcess');
+      const btnClear = document.getElementById('btnClear');
+      const progressSection = document.getElementById('progressSection');
+      const progressFill = document.getElementById('progressFill');
+      const progressText = document.getElementById('progressText');
+      const summary = document.getElementById('summary');
+      const modelStatus = document.getElementById('modelStatus');
+      const ocrStatus = document.getElementById('ocrStatus');
+      const totalBadge = document.getElementById('totalBadge');
+      const optFlareTag = document.getElementById('optFlareTag');
+      const optOcr = document.getElementById('optOcr');
+      const flareThreshold = document.getElementById('flareThreshold');
+      const flareThresholdLabel = document.getElementById('flareThresholdLabel');
+      const statTotal = document.getElementById('statTotal');
+      const statRenamed = document.getElementById('statRenamed');
+      const statFlare = document.getElementById('statFlare');
+      const statErrors = document.getElementById('statErrors');
+      const summaryNote = document.getElementById('summaryNote');
+
+      let images = [];
+      let model = null;
+      let ocrWorker = null;
+      let modelLoaded = false;
+      let ocrLoaded = false;
+      let isProcessing = false;
+
+      flareThreshold.addEventListener('input', () => {
+        flareThresholdLabel.textContent = parseFloat(flareThreshold.value).toFixed(2);
+      });
+
+      dropZone.addEventListener('click', () => fileInput.click());
+      dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+      dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+      dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+      fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFiles(fileInput.files); });
+
+      function handleFiles(files) {
+        if (isProcessing) return;
+        const valid = [];
+        for (const f of files) {
+          if (f.type.startsWith('image/')) valid.push(f);
+        }
+        if (!valid.length) return;
+        for (const f of valid) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            images.push({ file: f, url: e.target.result, results: null });
+            updateGallery();
+          };
+          reader.readAsDataURL(f);
+        }
+      }
+
+      function updateGallery() {
+        gallery.innerHTML = '';
+        if (images.length === 0) {
+          dropZone.classList.remove('has-images');
+          dropZone.querySelector('.drop-zone-icon').innerHTML = '&#128247;';
+          dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>Drop images here</strong> or click to browse';
+          totalBadge.classList.add('hidden');
+          btnProcess.disabled = true;
+          return;
+        }
+        dropZone.classList.add('has-images');
+        dropZone.querySelector('.drop-zone-icon').innerHTML = `&#128193; ${images.length} images`;
+        dropZone.querySelector('.drop-zone-text').innerHTML = 'Click to add more images';
+        totalBadge.classList.remove('hidden');
+        totalBadge.textContent = `Images: ${images.length}`;
+        btnProcess.disabled = !modelLoaded || !ocrLoaded;
+
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.id = `card-${i}`;
+          card.innerHTML = `
+            <img class="card-img" src="${img.url}" alt="${img.file.name}">
+            <div class="card-body">
+              <div class="card-title">${escapeHtml(img.file.name)}</div>
+              <div class="card-subtitle" id="sub-${i}">${img.results ? formatResultLine(img.results) : 'Waiting...'}</div>
+            </div>
+          `;
+          gallery.appendChild(card);
+        }
+      }
+
+      function formatResultLine(r) {
+        const parts = [];
+        if (r.keyword) parts.push(`<span class="tag-flare tag-ai">${r.keyword}</span>`);
+        if (r.confidence) parts.push(`<span style="color:#888;font-size:0.7rem;">${(r.confidence*100).toFixed(1)}%</span>`);
+        if (r.hasFlare) parts.push(`<span class="tag-flare">FLARE ${(r.flareScore*100).toFixed(0)}%</span>`);
+        if (r.detectedText) parts.push(`<span class="tag-ocr">OCR</span>`);
+        if (r.error) parts.push(`<span class="tag-flare tag-ocr" style="color:#f87171;">Error</span>`);
+        if (r.newName) parts.push(`<div class="card-new-name">${escapeHtml(r.newName)}</div>`);
+        if (r.newName && r.originalName !== r.newName) parts.push(`<div class="card-old-name">${escapeHtml(r.originalName)}</div>`);
+        return parts.join(' ');
+      }
+
+      function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+      // Load MobileNet
+      async function loadModel() {
+        try {
+          modelStatus.textContent = 'Model: loading...';
+          modelStatus.className = 'badge';
+          model = await mobilenet.load({ version: 2, alpha: 1 });
+          modelLoaded = true;
+          modelStatus.textContent = 'Model: ready';
+          modelStatus.className = 'badge ready';
+          btnProcess.disabled = !modelLoaded || !ocrLoaded || images.length === 0;
+        } catch (e) {
+          modelStatus.textContent = 'Model: failed to load';
+          modelStatus.className = 'badge error';
+          console.error(e);
+        }
+      }
+
+      // Load Tesseract
+      async function loadOcr() {
+        try {
+          ocrStatus.textContent = 'OCR: loading...';
+          ocrStatus.className = 'badge';
+          ocrWorker = await Tesseract.createWorker('eng');
+          ocrLoaded = true;
+          ocrStatus.textContent = 'OCR: ready';
+          ocrStatus.className = 'badge ready';
+          btnProcess.disabled = !modelLoaded || !ocrLoaded || images.length === 0;
+        } catch (e) {
+          ocrStatus.textContent = 'OCR: failed to load';
+          ocrStatus.className = 'badge error';
+          console.error(e);
+        }
+      }
+
+      // Flare detection (browser port of the Python/Android algorithm)
+      function detectFlare(imgData, width, height, threshold) {
+        const data = imgData.data;
+        const totalPixels = width * height;
+        const hue = new Float32Array(totalPixels);
+        const value = new Float32Array(totalPixels);
+        const brightMask = new Uint8Array(totalPixels);
+
+        for (let i = 0; i < totalPixels; i++) {
+          const idx = i * 4;
+          const r = data[idx] / 255;
+          const g = data[idx + 1] / 255;
+          const b = data[idx + 2] / 255;
+
+          const cmax = Math.max(r, g, b);
+          const cmin = Math.min(r, g, b);
+          const delta = cmax - cmin;
+
+          let h = 0;
+          if (delta !== 0) {
+            if (cmax === r) h = 60 * (((g - b) / delta) % 6);
+            else if (cmax === g) h = 60 * (((b - r) / delta) + 2);
+            else h = 60 * (((r - g) / delta) + 4);
+          }
+          if (h < 0) h += 360;
+          hue[i] = h;
+          value[i] = cmax * 360;
+          brightMask[i] = value[i] > 240 ? 1 : 0;
+        }
+
+        const brightCount = brightMask.reduce((a, b) => a + b, 0);
+        const brightRatio = brightCount / totalPixels;
+
+        const visited = new Uint8Array(totalPixels);
+        const regions = [];
+
+        function floodFill(start) {
+          const stack = [start];
+          let count = 0;
+          let totalHue = 0;
+          while (stack.length) {
+            const idx = stack.pop();
+            if (idx < 0 || idx >= totalPixels || visited[idx] || !brightMask[idx]) continue;
+            visited[idx] = 1;
+            count++;
+            totalHue += hue[idx];
+            const x = idx % width;
+            const y = Math.floor(idx / width);
+            if (x > 0) stack.push(idx - 1);
+            if (x < width - 1) stack.push(idx + 1);
+            if (y > 0) stack.push(idx - width);
+            if (y < height - 1) stack.push(idx + width);
+          }
+          return { count, totalHue };
+        }
+
+        for (let i = 0; i < totalPixels; i++) {
+          if (!visited[i] && brightMask[i]) {
+            const { count, totalHue } = floodFill(i);
+            if (count >= 50) {
+              const meanHue = totalHue / count;
+              const isMagenta = meanHue >= 280 && meanHue <= 330;
+              regions.push({ area: count, meanHue, isMagenta });
+            }
+          }
+        }
+
+        const largeRegions = regions.filter(r => r.area > 500).length;
+        const magentaRegions = regions.filter(r => r.isMagenta).length;
+
+        let score = 0;
+        if (brightRatio > 0.15) score += 0.3;
+        if (largeRegions >= 2) score += 0.3;
+        if (largeRegions >= 3) score += 0.2;
+        if (magentaRegions >= 1) score += 0.2;
+        if (brightRatio > 0.05 && largeRegions >= 1) score += 0.2;
+        score = Math.min(score, 1);
+
+        return { hasFlare: score >= threshold, score, brightRatio, brightRegionCount: largeRegions };
+      }
+
+      // Clean label
+      function cleanLabel(label) {
+        return label.replace(/\(.*?\)/g, '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      }
+
+      // Process all images
+      async function processImages() {
+        if (isProcessing || !images.length) return;
+        isProcessing = true;
+        btnProcess.disabled = true;
+        btnClear.disabled = true;
+        progressSection.classList.add('active');
+        summary.classList.remove('active');
+        gallery.innerHTML = '';
+
+        const addFlare = optFlareTag.checked;
+        const useOcr = optOcr.checked;
+        const flareThresh = parseFloat(flareThreshold.value);
+        const counters = {};
+        const results = [];
+        let total = images.length;
+        let renamedCount = 0;
+        let flareCount = 0;
+        let errorCount = 0;
+
+        for (let i = 0; i < images.length; i++) {
+          const img = images[i];
+          const ext = img.file.name.split('.').pop().toLowerCase();
+          progressFill.style.width = `${((i) / total * 100)}%`;
+          progressText.innerHTML = `<span class="loading"></span> Processing ${i + 1}/${total}: ${escapeHtml(img.file.name)}`;
+
+          try {
+            // Decode image
+            const bitmap = await createImageBitmap(img.file);
+            const canvas = document.createElement('canvas');
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bitmap, 0, 0);
+            bitmap.close();
+
+            // 1. Flare detection
+            const fullImgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const flareResult = detectFlare(fullImgData, canvas.width, canvas.height, flareThresh);
+
+            // 2. AI Classification (resize to 224x224)
+            const smallCanvas = document.createElement('canvas');
+            smallCanvas.width = 224;
+            smallCanvas.height = 224;
+            const smallCtx = smallCanvas.getContext('2d');
+            smallCtx.drawImage(canvas, 0, 0, 224, 224);
+            const predictions = await model.classify(smallCanvas);
+            smallCanvas.width = 0;
+            smallCanvas.height = 0;
+
+            const topPred = predictions[0] || { className: 'unknown', probability: 0 };
+            const keyword = cleanLabel(topPred.className) || 'unknown';
+            const confidence = topPred.probability;
+
+            // 3. OCR
+            let detectedText = null;
+            if (useOcr) {
+              try {
+                const ocrResult = await ocrWorker.recognize(canvas);
+                const text = ocrResult.data.text.trim();
+                if (text.length > 0) {
+                  detectedText = text.substring(0, 100);
+                  const ocrConfidence = ocrResult.data.confidence;
+                  if (ocrConfidence > 50) {
+                    // Use OCR text as keyword if confidence is decent
+                    const ocrKeyword = cleanLabel(text.split('\n')[0]) || keyword;
+                    // Don't override completely, but prefer OCR for document-like images
+                  }
+                }
+              } catch (e) {
+                // OCR failed silently
+              }
+            }
+            canvas.width = 0;
+            canvas.height = 0;
+
+            // 4. Determine keyword (prefer OCR if high confidence)
+            let finalKeyword = keyword;
+            if (detectedText && detectedText.length > 0 && confidence < 0.3) {
+              finalKeyword = 'document';
+            }
+
+            // 5. Generate new name
+            const count = (counters[finalKeyword] || 0) + 1;
+            counters[finalKeyword] = count;
+            let newName = `${finalKeyword}_${String(count).padStart(3, '0')}.${ext}`;
+            if (flareResult.hasFlare && addFlare) {
+              newName = `flare_${newName}`;
+            }
+
+            const willRename = img.file.name !== newName;
+            if (willRename) renamedCount++;
+            if (flareResult.hasFlare) flareCount++;
+
+            const result = {
+              originalName: img.file.name,
+              newName,
+              keyword: finalKeyword,
+              confidence,
+              hasFlare: flareResult.hasFlare,
+              flareScore: flareResult.score,
+              detectedText,
+              renamed: willRename,
+              error: null
+            };
+
+            img.results = result;
+            results.push(result);
+          } catch (e) {
+            errorCount++;
+            const result = { originalName: img.file.name, newName: null, keyword: 'error', confidence: 0, hasFlare: false, flareScore: 0, detectedText: null, renamed: false, error: e.message };
+            img.results = result;
+            results.push(result);
+          }
+
+          // Add/update card
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <img class="card-img" src="${img.url}" alt="${escapeHtml(img.file.name)}">
+            <div class="card-body">
+              <div class="card-title">${escapeHtml(img.file.name)}</div>
+              <div class="card-subtitle">${formatResultLine(img.results)}</div>
+            </div>
+          `;
+          gallery.appendChild(card);
+        }
+
+        progressFill.style.width = '100%';
+        progressText.textContent = `Done! ${total} images processed.`;
+
+        // Show summary
+        summary.classList.add('active');
+        statTotal.textContent = total;
+        statRenamed.textContent = renamedCount;
+        statFlare.textContent = flareCount;
+        statErrors.textContent = errorCount;
+        summaryNote.textContent = `Naming scheme: [keyword]_[counter].ext ${addFlare ? '· flare_ prefix when detected' : ''}`;
+
+        // Download results as CSV
+        let csv = 'Original Name,New Name,Keyword,Confidence,Flare,Flare Score,OCR Text\n';
+        for (const r of results) {
+          csv += `"${r.originalName}","${r.newName || ''}","${r.keyword}",${r.confidence.toFixed(3)},${r.hasFlare},${r.flareScore.toFixed(3)},"${r.detectedText || ''}"\n`;
+        }
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'picpulse-results.csv';
+        link.textContent = 'Download CSV Results';
+        link.style.cssText = 'display:inline-block;margin-top:0.5rem;color:#a855f7;font-size:0.85rem;';
+        document.getElementById('summaryNote').appendChild(document.createElement('br'));
+        document.getElementById('summaryNote').appendChild(link);
+
+        isProcessing = false;
+        btnProcess.disabled = images.length === 0;
+        btnClear.disabled = false;
+      }
+
+      btnProcess.addEventListener('click', processImages);
+
+      btnClear.addEventListener('click', () => {
+        if (isProcessing) return;
+        images = [];
+        gallery.innerHTML = '';
+        summary.classList.remove('active');
+        progressSection.classList.remove('active');
+        progressFill.style.width = '0%';
+        progressText.textContent = 'Ready';
+        updateGallery();
+      });
+
+      loadModel();
+      loadOcr();
+    })();
+  </script>
+</body>
+</html>
