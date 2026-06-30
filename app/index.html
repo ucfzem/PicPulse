@@ -517,6 +517,77 @@
         ]);
       }
 
+      async function processOneImage(img, ext, addFlare, useOcr, flareThresh, counters) {
+        const bitmap = await createImageBitmap(img.file);
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+
+        const flareCanvas = scaleCanvas(canvas, 700);
+        const flareCtx = flareCanvas.getContext('2d');
+        const fullImgData = flareCtx.getImageData(0, 0, flareCanvas.width, flareCanvas.height);
+        const flareResult = detectFlare(fullImgData, flareCanvas.width, flareCanvas.height, flareThresh);
+        if (flareCanvas !== canvas) { flareCanvas.width = 0; flareCanvas.height = 0; }
+
+        const smallCanvas = document.createElement('canvas');
+        smallCanvas.width = 224;
+        smallCanvas.height = 224;
+        const smallCtx = smallCanvas.getContext('2d');
+        smallCtx.drawImage(canvas, 0, 0, 224, 224);
+        const predictions = await model.classify(smallCanvas);
+        smallCanvas.width = 0;
+        smallCanvas.height = 0;
+
+        const topPred = predictions[0] || { className: 'unknown', probability: 0 };
+        const keyword = cleanLabel(topPred.className) || 'unknown';
+        const confidence = topPred.probability;
+
+        let detectedText = null;
+        let ocrConfidence = 0;
+        if (useOcr) {
+          try {
+            const ocrCanvas = scaleCanvas(canvas, 1200);
+            const ocrResult = await ocrWorker.recognize(ocrCanvas);
+            if (ocrCanvas !== canvas) { ocrCanvas.width = 0; ocrCanvas.height = 0; }
+            const text = ocrResult.data.text.trim();
+            ocrConfidence = ocrResult.data.confidence;
+            if (text.length > 0) {
+              detectedText = text.substring(0, 100);
+            }
+          } catch (e) { /* OCR failed silently */ }
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+
+        let finalKeyword = keyword;
+        const meaningfulText = detectedText ? detectedText.replace(/\s+/g, '') : '';
+        if (useOcr && meaningfulText.length >= 8 && ocrConfidence > 60) {
+          finalKeyword = 'document';
+        }
+
+        const count = (counters[finalKeyword] || 0) + 1;
+        counters[finalKeyword] = count;
+        let newName = `${finalKeyword}_${String(count).padStart(3, '0')}.${ext}`;
+        if (flareResult.hasFlare && addFlare) {
+          newName = `flare_${newName}`;
+        }
+
+        return {
+          originalName: img.file.name,
+          newName,
+          keyword: finalKeyword,
+          confidence,
+          hasFlare: flareResult.hasFlare,
+          flareScore: flareResult.score,
+          detectedText,
+          renamed: img.file.name !== newName,
+          error: null
+        };
+      }
+
       // Process all images
       async function processImages() {
         if (isProcessing || !images.length) return;
@@ -544,87 +615,9 @@
           progressText.innerHTML = `<span class="loading"></span> Processing ${i + 1}/${total}: ${escapeHtml(img.file.name)}`;
 
           try {
-            // Decode image
-            const bitmap = await createImageBitmap(img.file);
-            const canvas = document.createElement('canvas');
-            canvas.width = bitmap.width;
-            canvas.height = bitmap.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(bitmap, 0, 0);
-            bitmap.close();
-
-            // 1. Flare detection (on a downscaled copy — see scaleCanvas note above)
-            const flareCanvas = scaleCanvas(canvas, 700);
-            const flareCtx = flareCanvas.getContext('2d');
-            const fullImgData = flareCtx.getImageData(0, 0, flareCanvas.width, flareCanvas.height);
-            const flareResult = detectFlare(fullImgData, flareCanvas.width, flareCanvas.height, flareThresh);
-            if (flareCanvas !== canvas) { flareCanvas.width = 0; flareCanvas.height = 0; }
-
-            // 2. AI Classification (resize to 224x224)
-            const smallCanvas = document.createElement('canvas');
-            smallCanvas.width = 224;
-            smallCanvas.height = 224;
-            const smallCtx = smallCanvas.getContext('2d');
-            smallCtx.drawImage(canvas, 0, 0, 224, 224);
-            const predictions = await withTimeout(model.classify(smallCanvas), 10000, 'Classification');
-            smallCanvas.width = 0;
-            smallCanvas.height = 0;
-
-            const topPred = predictions[0] || { className: 'unknown', probability: 0 };
-            const keyword = cleanLabel(topPred.className) || 'unknown';
-            const confidence = topPred.probability;
-
-            // 3. OCR
-            let detectedText = null;
-            let ocrConfidence = 0;
-            if (useOcr) {
-              try {
-                const ocrCanvas = scaleCanvas(canvas, 1200);
-                const ocrResult = await withTimeout(ocrWorker.recognize(ocrCanvas), 15000, 'OCR');
-                if (ocrCanvas !== canvas) { ocrCanvas.width = 0; ocrCanvas.height = 0; }
-                const text = ocrResult.data.text.trim();
-                ocrConfidence = ocrResult.data.confidence;
-                if (text.length > 0) {
-                  detectedText = text.substring(0, 100);
-                }
-              } catch (e) {
-                // OCR failed silently
-              }
-            }
-            canvas.width = 0;
-            canvas.height = 0;
-
-            // 4. Determine keyword
-            let finalKeyword = keyword;
-            const meaningfulText = detectedText ? detectedText.replace(/\s+/g, '') : '';
-            if (useOcr && meaningfulText.length >= 8 && ocrConfidence > 60) {
-              finalKeyword = 'document';
-            }
-
-            // 5. Generate new name
-            const count = (counters[finalKeyword] || 0) + 1;
-            counters[finalKeyword] = count;
-            let newName = `${finalKeyword}_${String(count).padStart(3, '0')}.${ext}`;
-            if (flareResult.hasFlare && addFlare) {
-              newName = `flare_${newName}`;
-            }
-
-            const willRename = img.file.name !== newName;
-            if (willRename) renamedCount++;
-            if (flareResult.hasFlare) flareCount++;
-
-            const result = {
-              originalName: img.file.name,
-              newName,
-              keyword: finalKeyword,
-              confidence,
-              hasFlare: flareResult.hasFlare,
-              flareScore: flareResult.score,
-              detectedText,
-              renamed: willRename,
-              error: null
-            };
-
+            const result = await withTimeout(processOneImage(img, ext, addFlare, useOcr, flareThresh, counters), 30000, 'Image processing');
+            if (result.renamed) renamedCount++;
+            if (result.hasFlare) flareCount++;
             img.results = result;
             results.push(result);
           } catch (e) {
