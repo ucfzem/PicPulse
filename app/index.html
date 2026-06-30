@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.21.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #f0f0f0; line-height: 1.6; min-height: 100vh; }
@@ -53,8 +54,12 @@
     .tag-flare { background: #7c2d1233; color: #fb923c; border: 1px solid #7c2d1255; }
     .tag-ocr { background: #1e3a5f33; color: #60a5fa; border: 1px solid #1e3a5f55; }
     .tag-ai { background: #2d1b5e33; color: #a78bfa; border: 1px solid #2d1b5e55; }
+    .rename-row { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap; }
+    .rename-input { background: #0d0d0d; border: 1px solid #333; border-radius: 4px; color: #4ade80; font-size: 0.8rem; padding: 0.2rem 0.4rem; flex: 1; min-width: 80px; }
+    .rename-input:focus { outline: none; border-color: #a855f7; }
     .card-new-name { font-size: 0.8rem; color: #4ade80; word-break: break-all; }
     .card-old-name { font-size: 0.7rem; color: #f87171; text-decoration: line-through; word-break: break-all; }
+    .card-arrow { color: #555; font-size: 0.75rem; }
     .summary { background: #111; border: 1px solid #222; border-radius: 10px; padding: 1rem; margin: 1rem 0; display: none; }
     .summary.active { display: block; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
@@ -125,7 +130,12 @@
         <div class="stat stat-flare"><div class="stat-value" id="statFlare">0</div><div class="stat-label">Flare</div></div>
         <div class="stat stat-errors"><div class="stat-value" id="statErrors">0</div><div class="stat-label">Errors</div></div>
       </div>
-      <div style="margin-top:0.75rem;font-size:0.8rem;color:#888;" id="summaryNote"></div>
+      <div class="actions" id="resultActions" style="display:none;margin-top:0.75rem;">
+        <button class="btn btn-primary" id="btnApplyRenames">Apply Edits</button>
+        <button class="btn btn-secondary" id="btnDownloadZip">Download ZIP</button>
+        <button class="btn btn-secondary" id="btnDownloadCsv">Download CSV</button>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.8rem;color:#888;" id="summaryNote"></div>
     </div>
 
     <div id="gallery" class="gallery"></div>
@@ -264,7 +274,7 @@
         try {
           ocrStatus.textContent = 'OCR: loading...';
           ocrStatus.className = 'badge';
-          ocrWorker = await Tesseract.createWorker('eng');
+          ocrWorker = await Tesseract.createWorker(['eng', 'ara']);
           ocrLoaded = true;
           ocrStatus.textContent = 'OCR: ready';
           ocrStatus.className = 'badge ready';
@@ -487,14 +497,23 @@
             results.push(result);
           }
 
-          // Add/update card
+          // Add/update card with editable rename input
           const card = document.createElement('div');
           card.className = 'card';
+          card.id = `card-${i}`;
+          const tags = formatResultLine(img.results);
+          const safeNewName = escapeHtml(result.newName || '');
+          const safeOrigName = escapeHtml(result.originalName);
           card.innerHTML = `
-            <img class="card-img" src="${img.url}" alt="${escapeHtml(img.file.name)}">
+            <img class="card-img" src="${img.url}" alt="${safeOrigName}">
             <div class="card-body">
-              <div class="card-title">${escapeHtml(img.file.name)}</div>
-              <div class="card-subtitle">${formatResultLine(img.results)}</div>
+              <div class="card-title">${safeOrigName}</div>
+              <div class="card-subtitle">${tags}</div>
+              <div class="rename-row">
+                <span class="card-old-name">${safeOrigName}</span>
+                <span class="card-arrow">&rarr;</span>
+                <input class="rename-input" value="${safeNewName}" data-idx="${i}">
+              </div>
             </div>
           `;
           gallery.appendChild(card);
@@ -503,6 +522,8 @@
         progressFill.style.width = '100%';
         progressText.textContent = `Done! ${total} images processed.`;
 
+        storedResults = results;
+
         // Show summary
         summary.classList.add('active');
         statTotal.textContent = total;
@@ -510,33 +531,81 @@
         statFlare.textContent = flareCount;
         statErrors.textContent = errorCount;
         summaryNote.textContent = `Naming scheme: [keyword]_[counter].ext ${addFlare ? '· flare_ prefix when detected' : ''}`;
-
-        // Download results as CSV
-        let csv = 'Original Name,New Name,Keyword,Confidence,Flare,Flare Score,OCR Text\n';
-        for (const r of results) {
-          csv += `"${r.originalName}","${r.newName || ''}","${r.keyword}",${r.confidence.toFixed(3)},${r.hasFlare},${r.flareScore.toFixed(3)},"${r.detectedText || ''}"\n`;
-        }
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'picpulse-results.csv';
-        link.textContent = 'Download CSV Results';
-        link.style.cssText = 'display:inline-block;margin-top:0.5rem;color:#a855f7;font-size:0.85rem;';
-        document.getElementById('summaryNote').appendChild(document.createElement('br'));
-        document.getElementById('summaryNote').appendChild(link);
+        document.getElementById('resultActions').style.display = 'flex';
 
         isProcessing = false;
         btnProcess.disabled = images.length === 0;
         btnClear.disabled = false;
       }
 
+      let storedResults = [];
+
+      function applyRenames() {
+        const inputs = document.querySelectorAll('.rename-input');
+        for (const inp of inputs) {
+          const idx = parseInt(inp.dataset.idx);
+          if (!isNaN(idx) && idx < storedResults.length) {
+            storedResults[idx].newName = inp.value;
+            storedResults[idx].renamed = storedResults[idx].originalName !== inp.value;
+          }
+        }
+        const renamed = storedResults.filter(r => r.renamed).length;
+        statRenamed.textContent = renamed;
+      }
+
+      function downloadCsv() {
+        const addFlare = optFlareTag.checked;
+        let csv = 'Original Name,New Name,Keyword,Confidence,Flare,Flare Score,OCR Text\n';
+        for (const r of storedResults) {
+          csv += `"${r.originalName}","${r.newName || ''}","${r.keyword}",${r.confidence.toFixed(3)},${r.hasFlare},${r.flareScore.toFixed(3)},"${r.detectedText || ''}"\n`;
+        }
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'picpulse-results.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      async function downloadZip() {
+        if (typeof JSZip === 'undefined') { alert('JSZip not loaded'); return; }
+        const zip = new JSZip();
+        const folder = zip.folder('picpulse-renamed');
+        for (let i = 0; i < storedResults.length; i++) {
+          const r = storedResults[i];
+          const img = images[i];
+          if (!img || r.error) continue;
+          try {
+            const response = await fetch(img.url);
+            const blob = await response.blob();
+            folder.file(r.newName || r.originalName, blob);
+          } catch (e) {
+            console.warn('Failed to add to zip:', r.originalName, e);
+          }
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'picpulse-renamed.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
       btnProcess.addEventListener('click', processImages);
+
+      document.getElementById('btnApplyRenames').addEventListener('click', applyRenames);
+      document.getElementById('btnDownloadCsv').addEventListener('click', downloadCsv);
+      document.getElementById('btnDownloadZip').addEventListener('click', downloadZip);
 
       btnClear.addEventListener('click', () => {
         if (isProcessing) return;
         images = [];
+        storedResults = [];
         gallery.innerHTML = '';
         summary.classList.remove('active');
+        document.getElementById('resultActions').style.display = 'none';
         progressSection.classList.remove('active');
         progressFill.style.width = '0%';
         progressText.textContent = 'Ready';
