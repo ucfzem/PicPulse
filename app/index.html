@@ -497,6 +497,19 @@
         return first.replace(/\(.*?\)/g, '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
       }
 
+      function scaleCanvas(sourceCanvas, maxDim) {
+        const { width, height } = sourceCanvas;
+        if (width <= maxDim && height <= maxDim) return sourceCanvas;
+        const scale = maxDim / Math.max(width, height);
+        const newW = Math.max(1, Math.round(width * scale));
+        const newH = Math.max(1, Math.round(height * scale));
+        const c = document.createElement('canvas');
+        c.width = newW;
+        c.height = newH;
+        c.getContext('2d').drawImage(sourceCanvas, 0, 0, newW, newH);
+        return c;
+      }
+
       // Process all images
       async function processImages() {
         if (isProcessing || !images.length) return;
@@ -533,9 +546,12 @@
             ctx.drawImage(bitmap, 0, 0);
             bitmap.close();
 
-            // 1. Flare detection
-            const fullImgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const flareResult = detectFlare(fullImgData, canvas.width, canvas.height, flareThresh);
+            // 1. Flare detection (on a downscaled copy — see scaleCanvas note above)
+            const flareCanvas = scaleCanvas(canvas, 700);
+            const flareCtx = flareCanvas.getContext('2d');
+            const fullImgData = flareCtx.getImageData(0, 0, flareCanvas.width, flareCanvas.height);
+            const flareResult = detectFlare(fullImgData, flareCanvas.width, flareCanvas.height, flareThresh);
+            if (flareCanvas !== canvas) { flareCanvas.width = 0; flareCanvas.height = 0; }
 
             // 2. AI Classification (resize to 224x224)
             const smallCanvas = document.createElement('canvas');
@@ -556,7 +572,9 @@
             let ocrConfidence = 0;
             if (useOcr) {
               try {
-                const ocrResult = await ocrWorker.recognize(canvas);
+                const ocrCanvas = scaleCanvas(canvas, 1200);
+                const ocrResult = await ocrWorker.recognize(ocrCanvas);
+                if (ocrCanvas !== canvas) { ocrCanvas.width = 0; ocrCanvas.height = 0; }
                 const text = ocrResult.data.text.trim();
                 ocrConfidence = ocrResult.data.confidence;
                 if (text.length > 0) {
