@@ -83,6 +83,11 @@ Format: `[keyword]_[counter].ext`
 5. Watch real-time previews and logs
 6. Results appear in the same folder with new names
 
+## Other Versions
+
+- **Android App**: https://github.com/ucfzem/picpulse-android (APK built via GitHub Actions)
+- **Web Landing**: https://ucfzem.github.io/PicPulse | https://picpulse-landing.vercel.app
+
 ## License
 
 MIT
