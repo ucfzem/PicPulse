@@ -558,12 +558,14 @@
       async function callOpenRouterVision(canvas) {
         const key = visionKey.value.trim();
         if (!key) throw new Error(t('vision_no_key'));
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const visionCanvas = scaleCanvas(canvas, 1200);
+        const dataUrl = visionCanvas.toDataURL('image/jpeg', 0.7);
+        if (visionCanvas !== canvas) { visionCanvas.width = 0; visionCanvas.height = 0; }
         const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-preview-04-17',
+            model: 'google/gemini-2.5-flash',
             messages: [{
               role: 'user',
               content: [
@@ -576,7 +578,7 @@
         });
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
-          throw new Error(`${t('vision_error')} ${res.status} ${errText}`);
+          throw new Error(`${t('vision_error')} ${res.status} ${errText.slice(0,200)}`);
         }
         const data = await res.json();
         const label = (data.choices?.[0]?.message?.content || '').trim().toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
