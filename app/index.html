@@ -381,12 +381,21 @@
         }
       }
 
-      // Load Tesseract
+      // Load Tesseract — warm-up forces full language data download at init time
       async function loadOcr() {
         try {
           ocrStatus.textContent = 'OCR: loading...';
           ocrStatus.className = 'badge';
           ocrWorker = await Tesseract.createWorker(['eng', 'ara']);
+          // Warm-up: recognize a 2x2 canvas to download all .traineddata before user hits Process
+          const warmCanvas = document.createElement('canvas');
+          warmCanvas.width = 2;
+          warmCanvas.height = 2;
+          const warmCtx = warmCanvas.getContext('2d');
+          warmCtx.fillRect(0, 0, 2, 2);
+          await ocrWorker.recognize(warmCanvas);
+          warmCanvas.width = 0;
+          warmCanvas.height = 0;
           ocrLoaded = true;
           ocrStatus.textContent = 'OCR: ready';
           ocrStatus.className = 'badge ready';
