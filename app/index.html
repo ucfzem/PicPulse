@@ -180,7 +180,11 @@
       <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
         <label class="opt-check" style="flex:1;min-width:200px;">
           <span style="color:var(--text-muted);font-size:0.8rem;">OpenRouter Key</span>
-          <input type="password" id="visionKey" placeholder="sk-or-v1-..." style="display:block;width:100%;margin-top:0.2rem;padding:0.35rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:monospace;font-size:0.8rem;" spellcheck="false">
+          <div style="display:flex;gap:0.3rem;margin-top:0.2rem;">
+            <input type="password" id="visionKey" placeholder="sk-or-v1-..." style="flex:1;padding:0.35rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:monospace;font-size:0.8rem;" spellcheck="false">
+            <button id="visionKeySave" style="padding:0.35rem 0.7rem;border-radius:6px;border:1px solid var(--gold);background:var(--gold);color:var(--btn-text);font-size:0.75rem;font-weight:600;cursor:pointer;">Save</button>
+            <span id="visionKeyStatus" style="font-size:0.75rem;color:var(--success);align-self:center;display:none;">Saved</span>
+          </div>
         </label>
         <label class="opt-check"><input type="checkbox" id="optVision"> <span id="optVisionLabel">AI Vision for bad labels (uses API quota)</span></label>
       </div>
@@ -386,11 +390,15 @@
 
 
       // Load saved API key
+      const visionKeyStatus = document.getElementById('visionKeyStatus');
       if (localStorage.getItem('picpulse-vision-key')) {
         visionKey.value = localStorage.getItem('picpulse-vision-key');
+        visionKeyStatus.style.display = 'inline';
       }
-      visionKey.addEventListener('input', () => {
+      document.getElementById('visionKeySave').addEventListener('click', () => {
         localStorage.setItem('picpulse-vision-key', visionKey.value);
+        visionKeyStatus.style.display = 'inline';
+        setTimeout(() => { visionKeyStatus.style.display = 'none'; }, 2000);
       });
 
 
