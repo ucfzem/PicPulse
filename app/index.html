@@ -1,88 +1,146 @@
-<!DOCTYPE html><html lang="en">
-<head>
+<!DOCTYPE html><html lang="fr" dir="ltr"><head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PicPulse Web - Image Analyzer</title>
+  <title id="pageTitle">PicPulse Web - Image Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.21.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
+    /* ============================================================
+       THEME TOKENS
+       Dark (par défaut) : brun / or / jaune / blanc
+       Light               : beige / brun / or
+       Changez ces variables pour ajuster toute l'identité visuelle
+       ============================================================ */
+    :root[data-theme="dark"]{
+      --bg:#120d08; --bg-soft:#1c150d; --card:#241b12; --border:#3a2c1a;
+      --text:#f5eee0; --text-muted:#a8967a;
+      --gold:#d8a643; --gold-2:#f0c14b; --btn-text:#1c130a;
+      --success:#7cb86a; --success-bg:rgba(124,184,106,.12);
+      --danger:#e2685f; --danger-bg:rgba(226,104,95,.12);
+      --info:#c9a86a; --info-bg:rgba(201,168,106,.14);
+      --flare:#e0923c; --flare-bg:rgba(224,146,60,.14);
+    }
+    :root[data-theme="light"]{
+      --bg:#f4ecd8; --bg-soft:#ece0c4; --card:#fffaf5; --border:#d8c39c;
+      --text:#3a2a17; --text-muted:#7a6647;
+      --gold:#a8752a; --gold-2:#c9971f; --btn-text:#fffaf0;
+      --success:#4a8f3c; --success-bg:rgba(74,143,60,.1);
+      --danger:#b23b32; --danger-bg:rgba(178,59,50,.1);
+      --info:#8a6a2e; --info-bg:rgba(138,106,46,.1);
+      --flare:#b56a1f; --flare-bg:rgba(181,106,31,.12);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #f0f0f0; line-height: 1.6; min-height: 100vh; }
+    body { font-family: 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; transition: background .25s, color .25s; }
     .container { max-width: 960px; margin: 0 auto; padding: 1.5rem; }
-    header { text-align: center; padding: 2rem 0 1.5rem; }
-    .logo { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.03em; }
-    .tagline { color: #888; font-size: 0.95rem; }
+    header { text-align: center; padding: 1.5rem 0 1rem; }
+
+
+    .top-controls { display:flex; justify-content:center; align-items:center; gap:.5rem; flex-wrap:wrap; margin-bottom:.75rem; }
+    .lang-btn { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:.3rem .6rem; font-size:1.05rem; cursor:pointer; opacity:.55; transition: all .2s; line-height:1; }
+    .lang-btn.active { opacity:1; border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+    .lang-btn:hover { opacity: .85; }
+    .theme-btn { background: var(--card); border:1px solid var(--border); border-radius:8px; padding:.3rem .7rem; cursor:pointer; font-size:1rem; color: var(--text); margin-inline-start:.5rem; }
+    .theme-btn:hover { border-color: var(--gold); }
+
+
+    .logo { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, var(--gold), var(--gold-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.03em; }
+    .tagline { color: var(--text-muted); font-size: 0.95rem; }
     .status-bar { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin: 1rem 0; }
-    .badge { background: #1a1a2e; color: #a855f7; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; border: 1px solid #a855f733; }
-    .badge.ready { border-color: #22c55e33; color: #4ade80; }
-    .badge.error { border-color: #ef444433; color: #f87171; }
-    .drop-zone { border: 2px dashed #333; border-radius: 12px; padding: 2.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s; margin: 1rem 0; }
-    .drop-zone:hover, .drop-zone.dragover { border-color: #a855f7; background: #1a1a2e; }
-    .drop-zone.has-images { border-style: solid; border-color: #22c55e55; padding: 1rem; }
+    .badge { background: var(--card); color: var(--gold); padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border); }
+    .badge.ready { border-color: var(--success); color: var(--success); }
+    .badge.error { border-color: var(--danger); color: var(--danger); }
+    .drop-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 2.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s; margin: 1rem 0; }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--gold); background: var(--bg-soft); }
+    .drop-zone.has-images { border-style: solid; border-color: var(--success); padding: 1rem; }
     .drop-zone-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-    .drop-zone-text { color: #888; font-size: 0.9rem; }
-    .options { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; padding: 1rem; background: #111; border-radius: 10px; border: 1px solid #222; }
-    .options label { display: flex; align-items: center; gap: 0.5rem; color: #ccc; font-size: 0.9rem; cursor: pointer; }
-    .options input[type="checkbox"] { accent-color: #a855f7; width: 16px; height: 16px; }
-    .options input[type="range"] { accent-color: #a855f7; width: 100px; }
-    .options .range-label { color: #888; font-size: 0.8rem; min-width: 2.5rem; text-align: right; }
+    .drop-zone-text { color: var(--text-muted); font-size: 0.9rem; }
+    .options { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: center; margin: 1rem 0; padding: 1rem; background: var(--card); border-radius: 10px; border: 1px solid var(--border); }
+    .options .opt-check { display: flex; align-items: center; gap: 0.5rem; color: var(--text); font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
+    .options input[type="checkbox"] { accent-color: var(--gold); width: 16px; height: 16px; flex-shrink: 0; }
+    .opt-threshold { flex: 1 1 220px; min-width: 200px; }
+    .opt-threshold-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .opt-threshold-head span:first-child { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
+    .opt-threshold .range-label { color: var(--gold); font-size: 0.8rem; font-weight: 600; }
+    .opt-threshold input[type="range"] { accent-color: var(--gold); width: 100%; display: block; }
+    @media (max-width: 600px) {
+      .options { flex-direction: column; align-items: stretch; gap: 1rem; }
+      .opt-threshold { flex: none; width: 100%; min-width: 0; }
+    }
     .btn { padding: 0.6rem 1.5rem; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; font-size: 0.9rem; }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-primary { background: linear-gradient(135deg, #6366f1, #a855f7); color: white; }
-    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 15px #a855f755; }
-    .btn-secondary { background: #222; color: #f0f0f0; border: 1px solid #444; }
-    .btn-secondary:hover:not(:disabled) { border-color: #a855f7; }
-    .btn-danger { background: #dc2626; color: white; }
-    .btn-danger:hover:not(:disabled) { background: #ef4444; }
+    .btn-primary { background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: var(--btn-text); }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(216,166,67,.35); }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--gold); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover:not(:disabled) { filter: brightness(1.1); }
     .actions { display: flex; gap: 0.75rem; justify-content: center; margin: 1rem 0; flex-wrap: wrap; }
     .progress-section { margin: 1rem 0; display: none; }
     .progress-section.active { display: block; }
-    .progress-bar { height: 6px; background: #222; border-radius: 3px; overflow: hidden; margin: 0.5rem 0; }
-    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); border-radius: 3px; width: 0%; transition: width 0.3s; }
-    .progress-text { color: #888; font-size: 0.85rem; text-align: center; }
+    .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin: 0.5rem 0; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-2)); border-radius: 3px; width: 0%; transition: width 0.3s; }
+    .progress-text { color: var(--text-muted); font-size: 0.85rem; text-align: center; }
     .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
-    .card { background: #111; border: 1px solid #222; border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
-    .card:hover { border-color: #a855f7aa; }
-    .card-img { width: 100%; height: 160px; object-fit: cover; display: block; background: #1a1a2e; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
+    .card:hover { border-color: var(--gold); }
+    .card-img { width: 100%; height: 160px; object-fit: cover; display: block; background: var(--bg-soft); }
     .card-body { padding: 0.6rem; }
-    .card-title { font-size: 0.85rem; font-weight: 600; color: #f0f0f0; word-break: break-all; }
-    .card-subtitle { font-size: 0.75rem; color: #888; margin-top: 0.2rem; }
+    .card-title { font-size: 0.85rem; font-weight: 600; color: var(--text); word-break: break-all; }
+    .card-subtitle { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; }
     .card-tag { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; margin-top: 0.3rem; }
-    .tag-flare { background: #7c2d1233; color: #fb923c; border: 1px solid #7c2d1255; }
-    .tag-ocr { background: #1e3a5f33; color: #60a5fa; border: 1px solid #1e3a5f55; }
-    .tag-ai { background: #2d1b5e33; color: #a78bfa; border: 1px solid #2d1b5e55; }
-    .card-new-name { font-size: 0.8rem; color: #4ade80; word-break: break-all; }
-    .card-old-name { font-size: 0.7rem; color: #f87171; text-decoration: line-through; word-break: break-all; }
-    .summary { background: #111; border: 1px solid #222; border-radius: 10px; padding: 1rem; margin: 1rem 0; display: none; }
+    .tag-flare { background: var(--flare-bg); color: var(--flare); border: 1px solid var(--flare); }
+    .tag-ocr { background: var(--info-bg); color: var(--info); border: 1px solid var(--info); }
+    .tag-ai { background: var(--info-bg); color: var(--gold); border: 1px solid var(--gold); }
+    .card-new-name { font-size: 0.8rem; color: var(--success); word-break: break-all; }
+    .card-old-name { font-size: 0.7rem; color: var(--danger); text-decoration: line-through; word-break: break-all; }
+    .summary { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin: 1rem 0; display: none; }
     .summary.active { display: block; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
     .stat { text-align: center; }
     .stat-value { font-size: 1.5rem; font-weight: 700; }
-    .stat-label { font-size: 0.75rem; color: #888; }
-    .stat-total .stat-value { color: #f0f0f0; }
-    .stat-renamed .stat-value { color: #4ade80; }
-    .stat-flare .stat-value { color: #fb923c; }
-    .stat-errors .stat-value { color: #f87171; }
-    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #444; border-top-color: #a855f7; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 0.3rem; }
+    .stat-label { font-size: 0.75rem; color: var(--text-muted); }
+    .stat-total .stat-value { color: var(--text); }
+    .stat-renamed .stat-value { color: var(--success); }
+    .stat-flare .stat-value { color: var(--flare); }
+    .stat-errors .stat-value { color: var(--danger); }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-inline-end: 0.3rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .hidden { display: none !important; }
-    .back-link { display: inline-block; color: #a855f7; text-decoration: none; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .back-link { display: inline-block; color: var(--gold); text-decoration: none; font-size: 0.85rem; margin-bottom: 0.5rem; }
     .back-link:hover { text-decoration: underline; }
-    .preview-row { display: flex; gap: 1rem; align-items: flex-start; margin: 0.5rem 0; padding: 0.5rem; background: #0d0d0d; border-radius: 8px; border: 1px solid #222; }
-    .preview-row img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
-    .preview-row .info { flex: 1; min-width: 0; }
-    .preview-row .info .name { font-size: 0.8rem; color: #4ade80; }
-    .preview-row .info .detail { font-size: 0.7rem; color: #888; }
+    .download-actions { display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.9rem; }
+    .download-btn { display:inline-flex; align-items:center; gap:0.4rem; padding:0.55rem 1.1rem; border-radius:8px; font-size:0.85rem; font-weight:600; text-decoration:none; border:1px solid var(--gold); color: var(--gold); background: var(--info-bg); transition: all .2s; }
+    .download-btn:hover { background: var(--gold); color: var(--btn-text); }
+    .download-btn.is-loading { opacity:0.55; pointer-events:none; border-style:dashed; }
+    footer { text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+    footer a { color: var(--gold); text-decoration: none; }
     @media (max-width: 600px) { .gallery { grid-template-columns: 1fr 1fr; } .card-img { height: 120px; } }
+
+
+    /* Arabe : ajustements RTL légers (le reste du flex-layout se retourne nativement avec dir="rtl") */
+    [dir="rtl"] .card-old-name, [dir="rtl"] .card-new-name { direction: ltr; text-align: right; unicode-bidi: plaintext; }
+    [dir="rtl"] .drop-zone-text strong { unicode-bidi: plaintext; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <a href="/PicPulse" class="back-link">&larr; Back to PicPulse</a>
+      <div class="top-controls">
+        <button class="lang-btn" data-lang="fr" aria-label="Français" title="Français">🇫🇷</button>
+        <button class="lang-btn" data-lang="en" aria-label="English" title="English">🇬🇧</button>
+        <button class="lang-btn" data-lang="es" aria-label="Español" title="Español">🇪🇸</button>
+        <button class="lang-btn" data-lang="ar" aria-label="العربية" title="العربية">🇲🇦</button>
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">🌙</button>
+      </div>
+
+
+      <a href="/PicPulse" class="back-link" id="backLink">&larr; Back to PicPulse</a>
       <div class="logo">PicPulse Web</div>
-      <div class="tagline">AI Image Analyzer — runs entirely in your browser</div>
+      <div class="tagline" id="tagline">AI Image Analyzer — runs entirely in your browser</div>
       <div class="status-bar">
         <span id="modelStatus" class="badge">Model: loading...</span>
         <span id="ocrStatus" class="badge">OCR: loading...</span>
@@ -91,22 +149,31 @@
     </header>
 
 
+
+
     <div id="dropZone" class="drop-zone">
       <div class="drop-zone-icon">&#128247;</div>
-      <div class="drop-zone-text"><strong>Drop images here</strong> or click to browse</div>
-      <div style="color:#555;font-size:0.8rem;margin-top:0.3rem;">JPEG, PNG, GIF, BMP, WEBP</div>
+      <div class="drop-zone-text"><strong id="dropTitle">Drop images here</strong><span id="dropOr"> or click to browse</span></div>
+      <div style="color:var(--text-muted);font-size:0.8rem;margin-top:0.3rem;" id="dropFormats">JPEG, PNG, GIF, BMP, WEBP</div>
     </div>
+
+
 
 
     <div class="options">
-      <label><input type="checkbox" id="optFlareTag" checked> Add flare_ tag</label>
-      <label><input type="checkbox" id="optOcr" checked> OCR (text detection)</label>
-      <label style="flex:1;min-width:120px;">
-        <span style="color:#888;font-size:0.8rem;">Flare threshold</span>
+      <label class="opt-check"><input type="checkbox" id="optFlareTag" checked> <span id="optFlareLabel">Add flare_ tag</span></label>
+      <label class="opt-check"><input type="checkbox" id="optOcr" checked> <span id="optOcrLabel">OCR (text detection)</span></label>
+      <label class="opt-check"><input type="checkbox" id="optOcrExtra"> <span id="optOcrExtraLabel">Extra languages (Arabic, Spanish) — slower</span></label>
+      <div class="opt-threshold">
+        <div class="opt-threshold-head">
+          <span id="optThresholdLabel">Flare threshold</span>
+          <span class="range-label" id="flareThresholdLabel">0.30</span>
+        </div>
         <input type="range" id="flareThreshold" min="0.1" max="0.9" step="0.05" value="0.3">
-        <span class="range-label" id="flareThresholdLabel">0.30</span>
-      </label>
+      </div>
     </div>
+
+
 
 
     <div class="actions">
@@ -115,38 +182,150 @@
     </div>
 
 
+
+
     <div class="progress-section" id="progressSection">
       <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
       <div class="progress-text" id="progressText">Ready</div>
     </div>
 
 
+
+
     <div class="summary" id="summary">
-      <h3 style="font-size:1rem;color:#f0f0f0;">Results</h3>
+      <h3 style="font-size:1rem;color:var(--text);" id="resultsTitle">Results</h3>
       <div class="summary-grid">
-        <div class="stat stat-total"><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total</div></div>
-        <div class="stat stat-renamed"><div class="stat-value" id="statRenamed">0</div><div class="stat-label">Renamed</div></div>
-        <div class="stat stat-flare"><div class="stat-value" id="statFlare">0</div><div class="stat-label">Flare</div></div>
-        <div class="stat stat-errors"><div class="stat-value" id="statErrors">0</div><div class="stat-label">Errors</div></div>
+        <div class="stat stat-total"><div class="stat-value" id="statTotal">0</div><div class="stat-label" id="statTotalLabel">Total</div></div>
+        <div class="stat stat-renamed"><div class="stat-value" id="statRenamed">0</div><div class="stat-label" id="statRenamedLabel">Renamed</div></div>
+        <div class="stat stat-flare"><div class="stat-value" id="statFlare">0</div><div class="stat-label" id="statFlareLabel">Flare</div></div>
+        <div class="stat stat-errors"><div class="stat-value" id="statErrors">0</div><div class="stat-label" id="statErrorsLabel">Errors</div></div>
       </div>
-      <div style="margin-top:0.75rem;font-size:0.8rem;color:#888;" id="summaryNote"></div>
+      <div style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted);" id="summaryNote"></div>
+      <div class="download-actions" id="downloadActions"></div>
     </div>
+
+
 
 
     <div id="gallery" class="gallery"></div>
 
 
-    <footer style="text-align:center;padding:2rem 0;color:#555;font-size:0.8rem;border-top:1px solid #222;margin-top:2rem;">
-      Powered by TensorFlow.js, Tesseract.js &middot; <a href="https://github.com/ucfzem/PicPulse" style="color:#a855f7;text-decoration:none;">GitHub</a>
+
+
+    <footer>
+      <span id="footerText">Powered by TensorFlow.js, Tesseract.js</span> &middot; <a href="https://github.com/ucfzem/PicPulse">GitHub</a>
     </footer>
   </div>
+
+
 
 
   <input type="file" id="fileInput" accept="image/*" multiple hidden>
 
 
+
+
   <script>
     (function() {
+      // ============================================================
+      // I18N — FR / EN / ES / AR
+      // ============================================================
+      const I18N = {
+        en: {
+          title: "PicPulse Web - Image Analyzer",
+          tagline: "AI Image Analyzer — runs entirely in your browser",
+          back: "← Back to PicPulse",
+          model_loading: "Model: loading...", model_ready: "Model: ready", model_failed: "Model: failed to load",
+          ocr_loading: "OCR: loading...", ocr_ready: "OCR: ready", ocr_failed: "OCR: failed to load",
+          images_count: n => `Images: ${n}`,
+          drop_title: "Drop images here", drop_or: " or click to browse", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
+          drop_has_images: n => `📁 ${n} images`, drop_add_more: "Click to add more images",
+          opt_flare: "Add flare_ tag", opt_ocr: "OCR (text detection)", opt_ocr_extra: "Extra languages (Arabic, Spanish) — slower", opt_threshold: "Flare threshold",
+          btn_process: "Process Images", btn_clear: "Clear All",
+          progress_ready: "Ready",
+          stage_decode: "Decoding image...", stage_flare: "Detecting flare...", stage_classify: "Classifying (AI)...", stage_ocr: "Running OCR...",
+          progress_done: n => `Done! ${n} images processed.`,
+          waiting: "Waiting...",
+          results_title: "Results", stat_total: "Total", stat_renamed: "Renamed", stat_flare: "Flare", stat_errors: "Errors",
+          naming_scheme: flare => `Naming scheme: [keyword]_[counter].ext${flare ? ' · flare_ prefix when detected' : ''}`,
+          download_csv: "Download CSV Results", download_zip: "Download ZIP (renamed images)",
+          footer: "Powered by TensorFlow.js, Tesseract.js",
+          tag_flare: "FLARE", tag_error: "Error"
+        },
+        fr: {
+          title: "PicPulse Web - Analyseur d'images",
+          tagline: "Analyseur d'images IA — fonctionne entièrement dans votre navigateur",
+          back: "← Retour à PicPulse",
+          model_loading: "Modèle : chargement...", model_ready: "Modèle : prêt", model_failed: "Modèle : échec du chargement",
+          ocr_loading: "OCR : chargement...", ocr_ready: "OCR : prêt", ocr_failed: "OCR : échec du chargement",
+          images_count: n => `Images : ${n}`,
+          drop_title: "Déposez vos images ici", drop_or: " ou cliquez pour parcourir", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
+          drop_has_images: n => `📁 ${n} images`, drop_add_more: "Cliquez pour ajouter d'autres images",
+          opt_flare: "Ajouter le tag flare_", opt_ocr: "OCR (détection de texte)", opt_ocr_extra: "Langues supplémentaires (arabe, espagnol) — plus lent", opt_threshold: "Seuil de reflet",
+          btn_process: "Traiter les images", btn_clear: "Tout effacer",
+          progress_ready: "Prêt",
+          stage_decode: "Décodage de l'image...", stage_flare: "Détection des reflets...", stage_classify: "Classification (IA)...", stage_ocr: "OCR en cours...",
+          progress_done: n => `Terminé ! ${n} images traitées.`,
+          waiting: "En attente...",
+          results_title: "Résultats", stat_total: "Total", stat_renamed: "Renommées", stat_flare: "Reflets", stat_errors: "Erreurs",
+          naming_scheme: flare => `Schéma de nommage : [mot-clé]_[compteur].ext${flare ? ' · préfixe flare_ si détecté' : ''}`,
+          download_csv: "Télécharger les résultats (CSV)", download_zip: "Télécharger le ZIP (images renommées)",
+          footer: "Propulsé par TensorFlow.js, Tesseract.js",
+          tag_flare: "REFLET", tag_error: "Erreur"
+        },
+        es: {
+          title: "PicPulse Web - Analizador de imágenes",
+          tagline: "Analizador de imágenes con IA — funciona totalmente en tu navegador",
+          back: "← Volver a PicPulse",
+          model_loading: "Modelo: cargando...", model_ready: "Modelo: listo", model_failed: "Modelo: error de carga",
+          ocr_loading: "OCR: cargando...", ocr_ready: "OCR: listo", ocr_failed: "OCR: error de carga",
+          images_count: n => `Imágenes: ${n}`,
+          drop_title: "Suelta tus imágenes aquí", drop_or: " o haz clic para explorar", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
+          drop_has_images: n => `📁 ${n} imágenes`, drop_add_more: "Haz clic para añadir más imágenes",
+          opt_flare: "Añadir etiqueta flare_", opt_ocr: "OCR (detección de texto)", opt_ocr_extra: "Idiomas adicionales (árabe, español) — más lento", opt_threshold: "Umbral de destello",
+          btn_process: "Procesar imágenes", btn_clear: "Borrar todo",
+          progress_ready: "Listo",
+          stage_decode: "Decodificando imagen...", stage_flare: "Detectando destellos...", stage_classify: "Clasificando (IA)...", stage_ocr: "Ejecutando OCR...",
+          progress_done: n => `¡Listo! ${n} imágenes procesadas.`,
+          waiting: "Esperando...",
+          results_title: "Resultados", stat_total: "Total", stat_renamed: "Renombradas", stat_flare: "Destellos", stat_errors: "Errores",
+          naming_scheme: flare => `Esquema de nombres: [palabra_clave]_[contador].ext${flare ? ' · prefijo flare_ si se detecta' : ''}`,
+          download_csv: "Descargar resultados (CSV)", download_zip: "Descargar ZIP (imágenes renombradas)",
+          footer: "Desarrollado con TensorFlow.js, Tesseract.js",
+          tag_flare: "DESTELLO", tag_error: "Error"
+        },
+        ar: {
+          title: "PicPulse Web - محلّل الصور",
+          tagline: "محلّل صور بالذكاء الاصطناعي — يعمل بالكامل داخل متصفحك",
+          back: "→ العودة إلى PicPulse",
+          model_loading: "النموذج: جارٍ التحميل...", model_ready: "النموذج: جاهز", model_failed: "النموذج: فشل التحميل",
+          ocr_loading: "التعرف الضوئي: جارٍ التحميل...", ocr_ready: "التعرف الضوئي: جاهز", ocr_failed: "التعرف الضوئي: فشل التحميل",
+          images_count: n => `الصور: ${n}`,
+          drop_title: "أفلت الصور هنا", drop_or: " أو انقر للتصفح", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
+          drop_has_images: n => `📁 ${n} صورة`, drop_add_more: "انقر لإضافة المزيد من الصور",
+          opt_flare: "إضافة وسم flare_", opt_ocr: "التعرف الضوئي على النص (OCR)", opt_ocr_extra: "لغات إضافية (العربية، الإسبانية) — أبطأ", opt_threshold: "عتبة الوهج",
+          btn_process: "معالجة الصور", btn_clear: "مسح الكل",
+          progress_ready: "جاهز",
+          stage_decode: "جارٍ فك تشفير الصورة...", stage_flare: "جارٍ كشف الوهج...", stage_classify: "جارٍ التصنيف (ذكاء اصطناعي)...", stage_ocr: "جارٍ التعرف الضوئي على النص...",
+          progress_done: n => `تم! تمت معالجة ${n} صورة.`,
+          waiting: "بانتظار...",
+          results_title: "النتائج", stat_total: "الإجمالي", stat_renamed: "أُعيدت تسميتها", stat_flare: "وهج", stat_errors: "أخطاء",
+          naming_scheme: flare => `نمط التسمية: [كلمة_مفتاحية]_[عداد].ext${flare ? ' · بادئة flare_ عند الكشف' : ''}`,
+          download_csv: "تنزيل النتائج (CSV)", download_zip: "تنزيل ZIP (الصور المعاد تسميتها)",
+          footer: "مدعوم بـ TensorFlow.js وTesseract.js",
+          tag_flare: "وهج", tag_error: "خطأ"
+        }
+      };
+
+
+      let currentLang = 'fr';
+      let currentTheme = 'dark';
+      function t(key, ...args) {
+        const entry = (I18N[currentLang] && I18N[currentLang][key] !== undefined) ? I18N[currentLang][key] : I18N.en[key];
+        return typeof entry === 'function' ? entry(...args) : entry;
+      }
+
+
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('fileInput');
       const gallery = document.getElementById('gallery');
@@ -161,6 +340,7 @@
       const totalBadge = document.getElementById('totalBadge');
       const optFlareTag = document.getElementById('optFlareTag');
       const optOcr = document.getElementById('optOcr');
+      const optOcrExtra = document.getElementById('optOcrExtra');
       const flareThreshold = document.getElementById('flareThreshold');
       const flareThresholdLabel = document.getElementById('flareThresholdLabel');
       const statTotal = document.getElementById('statTotal');
@@ -173,9 +353,66 @@
       let images = [];
       let model = null;
       let ocrWorker = null;
-      let modelLoaded = false;
-      let ocrLoaded = false;
+      let modelState = 'loading'; // loading | ready | error
+      let ocrState = 'loading';
       let isProcessing = false;
+      let lastResults = null;
+      let lastAddFlare = true;
+
+
+      // ============================================================
+      // THEME
+      // ============================================================
+      function applyTheme(theme) {
+        currentTheme = theme;
+        document.documentElement.setAttribute('data-theme', theme);
+        document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+      });
+      applyTheme('dark');
+
+
+      // ============================================================
+      // LANGUAGE
+      // ============================================================
+      function applyLanguage(lang) {
+        currentLang = lang;
+        const isRtl = lang === 'ar';
+        document.documentElement.lang = lang;
+        document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+        document.getElementById('pageTitle').textContent = t('title');
+        document.getElementById('backLink').innerHTML = '&larr; ' + t('back').replace(/^[←→]\s*/, '');
+        document.getElementById('tagline').textContent = t('tagline');
+        document.getElementById('dropFormats').textContent = t('drop_formats');
+        document.getElementById('optFlareLabel').textContent = t('opt_flare');
+        document.getElementById('optOcrLabel').textContent = t('opt_ocr');
+        document.getElementById('optOcrExtraLabel').textContent = t('opt_ocr_extra');
+        document.getElementById('optThresholdLabel').textContent = t('opt_threshold');
+        btnProcess.textContent = t('btn_process');
+        btnClear.textContent = t('btn_clear');
+        document.getElementById('resultsTitle').textContent = t('results_title');
+        document.getElementById('statTotalLabel').textContent = t('stat_total');
+        document.getElementById('statRenamedLabel').textContent = t('stat_renamed');
+        document.getElementById('statFlareLabel').textContent = t('stat_flare');
+        document.getElementById('statErrorsLabel').textContent = t('stat_errors');
+        document.getElementById('footerText').textContent = t('footer');
+        if (!isProcessing) progressText.textContent = t('progress_ready');
+
+
+        document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+
+
+        renderStatusBadges();
+        updateGallery();
+        if (summary.classList.contains('active') && lastResults) {
+          renderSummary(lastResults, lastAddFlare);
+        }
+      }
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+      });
 
 
       flareThreshold.addEventListener('input', () => {
@@ -208,22 +445,48 @@
       }
 
 
+      function renderStatusBadges() {
+        const map = {
+          loading: [modelStatus, 'model_loading', ''],
+        };
+        const modelMap = { loading: 'model_loading', ready: 'model_ready', error: 'model_failed' };
+        const ocrMap = { loading: 'ocr_loading', ready: 'ocr_ready', error: 'ocr_failed' };
+        modelStatus.textContent = t(modelMap[modelState]);
+        modelStatus.className = 'badge' + (modelState === 'ready' ? ' ready' : modelState === 'error' ? ' error' : '');
+        ocrStatus.textContent = t(ocrMap[ocrState]);
+        ocrStatus.className = 'badge' + (ocrState === 'ready' ? ' ready' : ocrState === 'error' ? ' error' : '');
+      }
+
+
+      function buildCardHtml(fileName, url, results) {
+        return `
+          <img class="card-img" src="${url}" alt="${escapeHtml(fileName)}">
+          <div class="card-body">
+            <div class="card-title">${escapeHtml(fileName)}</div>
+            <div class="card-subtitle">${results ? formatResultLine(results) : t('waiting')}</div>
+          </div>
+        `;
+      }
+
+
       function updateGallery() {
         gallery.innerHTML = '';
         if (images.length === 0) {
           dropZone.classList.remove('has-images');
           dropZone.querySelector('.drop-zone-icon').innerHTML = '&#128247;';
-          dropZone.querySelector('.drop-zone-text').innerHTML = '<strong>Drop images here</strong> or click to browse';
+          document.getElementById('dropTitle').textContent = t('drop_title');
+          document.getElementById('dropOr').textContent = t('drop_or');
           totalBadge.classList.add('hidden');
           btnProcess.disabled = true;
           return;
         }
         dropZone.classList.add('has-images');
-        dropZone.querySelector('.drop-zone-icon').innerHTML = `&#128193; ${images.length} images`;
-        dropZone.querySelector('.drop-zone-text').innerHTML = 'Click to add more images';
+        dropZone.querySelector('.drop-zone-icon').innerHTML = t('drop_has_images', images.length);
+        document.getElementById('dropTitle').textContent = t('drop_add_more');
+        document.getElementById('dropOr').textContent = '';
         totalBadge.classList.remove('hidden');
-        totalBadge.textContent = `Images: ${images.length}`;
-        btnProcess.disabled = !modelLoaded || !ocrLoaded;
+        totalBadge.textContent = t('images_count', images.length);
+        btnProcess.disabled = !(modelState === 'ready') || !(ocrState === 'ready');
 
 
         for (let i = 0; i < images.length; i++) {
@@ -231,13 +494,7 @@
           const card = document.createElement('div');
           card.className = 'card';
           card.id = `card-${i}`;
-          card.innerHTML = `
-            <img class="card-img" src="${img.url}" alt="${img.file.name}">
-            <div class="card-body">
-              <div class="card-title">${escapeHtml(img.file.name)}</div>
-              <div class="card-subtitle" id="sub-${i}">${img.results ? formatResultLine(img.results) : 'Waiting...'}</div>
-            </div>
-          `;
+          card.innerHTML = buildCardHtml(img.file.name, img.url, img.results);
           gallery.appendChild(card);
         }
       }
@@ -245,11 +502,11 @@
 
       function formatResultLine(r) {
         const parts = [];
-        if (r.keyword) parts.push(`<span class="tag-flare tag-ai">${r.keyword}</span>`);
-        if (r.confidence) parts.push(`<span style="color:#888;font-size:0.7rem;">${(r.confidence*100).toFixed(1)}%</span>`);
-        if (r.hasFlare) parts.push(`<span class="tag-flare">FLARE ${(r.flareScore*100).toFixed(0)}%</span>`);
-        if (r.detectedText) parts.push(`<span class="tag-ocr">OCR</span>`);
-        if (r.error) parts.push(`<span class="tag-flare tag-ocr" style="color:#f87171;">Error</span>`);
+        if (r.keyword) parts.push(`<span class="card-tag tag-ai">${escapeHtml(r.keyword)}</span>`);
+        if (r.confidence) parts.push(`<span style="color:var(--text-muted);font-size:0.7rem;">${(r.confidence*100).toFixed(1)}%</span>`);
+        if (r.hasFlare) parts.push(`<span class="card-tag tag-flare">${t('tag_flare')} ${(r.flareScore*100).toFixed(0)}%</span>`);
+        if (r.detectedText) parts.push(`<span class="card-tag tag-ocr">OCR</span>`);
+        if (r.error) parts.push(`<span class="card-tag tag-flare" style="color:var(--danger);border-color:var(--danger);">${t('tag_error')}</span>`);
         if (r.newName) parts.push(`<div class="card-new-name">${escapeHtml(r.newName)}</div>`);
         if (r.newName && r.originalName !== r.newName) parts.push(`<div class="card-old-name">${escapeHtml(r.originalName)}</div>`);
         return parts.join(' ');
@@ -262,53 +519,36 @@
       // Load MobileNet
       async function loadModel() {
         try {
-          modelStatus.textContent = 'Model: loading...';
-          modelStatus.className = 'badge';
+          modelState = 'loading'; renderStatusBadges();
           model = await mobilenet.load({ version: 2, alpha: 1 });
-          modelLoaded = true;
-          modelStatus.textContent = 'Model: ready';
-          modelStatus.className = 'badge ready';
-          btnProcess.disabled = !modelLoaded || !ocrLoaded || images.length === 0;
+          modelState = 'ready'; renderStatusBadges();
+          btnProcess.disabled = !(modelState === 'ready') || !(ocrState === 'ready') || images.length === 0;
         } catch (e) {
-          modelStatus.textContent = 'Model: failed to load';
-          modelStatus.className = 'badge error';
+          modelState = 'error'; renderStatusBadges();
           console.error(e);
         }
       }
 
 
       // Load Tesseract
-      async function loadOcr() {
+      let currentOcrLangs = 'eng+fra';
+      async function loadOcr(langs) {
+        langs = langs || currentOcrLangs;
         try {
-          ocrStatus.textContent = 'OCR: loading...';
-          ocrStatus.className = 'badge';
-          ocrWorker = await Tesseract.createWorker('eng');
-          ocrLoaded = true;
-          ocrStatus.textContent = 'OCR: ready';
-          ocrStatus.className = 'badge ready';
-          btnProcess.disabled = !modelLoaded || !ocrLoaded || images.length === 0;
+          ocrState = 'loading'; renderStatusBadges();
+          if (ocrWorker) { try { await ocrWorker.terminate(); } catch (e) {} }
+          ocrWorker = await Tesseract.createWorker(langs);
+          currentOcrLangs = langs;
+          ocrState = 'ready'; renderStatusBadges();
+          btnProcess.disabled = !(modelState === 'ready') || !(ocrState === 'ready') || images.length === 0;
         } catch (e) {
-          ocrStatus.textContent = 'OCR: failed to load';
-          ocrStatus.className = 'badge error';
+          ocrState = 'error'; renderStatusBadges();
           console.error(e);
         }
       }
 
 
       // Flare detection (browser port of the Python/Android algorithm)
-      //
-      // FIX 1: `value` was previously computed as cmax * 360 (the HSV *hue*
-      // scale), then compared against a threshold of 240. That made the
-      // "bright pixel" cutoff sit at cmax > 0.667 — i.e. ~67% brightness —
-      // which is true for huge chunks of any normal photo (white shirts,
-      // skin highlights, gold logos, screens...). Real lens-flare highlights
-      // are near-blown-out, so `value` now uses the correct 0-255 scale and
-      // the same 240 threshold becomes cmax > 0.94 (genuinely near-white).
-      //
-      // FIX 2: region-size thresholds were fixed pixel counts (50 / 500),
-      // which don't scale with image resolution. A 4000x3000 photo will
-      // trivially have "large" 500px regions everywhere. Thresholds are now
-      // relative to total image area.
       function detectFlare(imgData, width, height, threshold) {
         const data = imgData.data;
         const totalPixels = width * height;
@@ -337,8 +577,8 @@
           }
           if (h < 0) h += 360;
           hue[i] = h;
-          value[i] = cmax * 255; // FIX: correct 0-255 value scale (was *360)
-          brightMask[i] = value[i] > 240 ? 1 : 0; // near-white pixels only
+          value[i] = cmax * 255;
+          brightMask[i] = value[i] > 240 ? 1 : 0;
         }
 
 
@@ -346,7 +586,6 @@
         const brightRatio = brightCount / totalPixels;
 
 
-        // FIX: relative-to-image-size region thresholds instead of fixed pixel counts
         const minRegionPixels = Math.max(30, totalPixels * 0.0005);
         const largeRegionPixels = Math.max(300, totalPixels * 0.003);
 
@@ -377,20 +616,18 @@
             if (y > 0) stack.push(idx - width);
             if (y < height - 1) stack.push(idx + width);
           }
-          return { count, totalHue, minX, maxX, minY, maxY };
+          let edgesTouched = 0;
+          if (minX <= 0) edgesTouched++;
+          if (maxX >= width - 1) edgesTouched++;
+          if (minY <= 0) edgesTouched++;
+          if (maxY >= height - 1) edgesTouched++;
+          return { count, totalHue, minX, maxX, minY, maxY, edgesTouched };
         }
 
 
-        // FIX: count of "bright regions" alone is not evidence of lens flare —
-        // dense text/calligraphy, fragmented studio backgrounds, jersey stripes,
-        // and fabric highlights all produce many disconnected bright blobs. The
-        // real visual signature of optical flare is *circular* halos: each
-        // region's bounding-box fill ratio close to 1 (round, not a thin stroke
-        // or band) and an aspect ratio close to square (not elongated). Only
-        // regions passing this circularity check count toward the score.
         for (let i = 0; i < totalPixels; i++) {
           if (!visited[i] && brightMask[i]) {
-            const { count, totalHue, minX, maxX, minY, maxY } = floodFill(i);
+            const { count, totalHue, minX, maxX, minY, maxY, edgesTouched } = floodFill(i);
             if (count >= minRegionPixels) {
               const meanHue = totalHue / count;
               const isMagenta = meanHue >= 280 && meanHue <= 330;
@@ -400,20 +637,27 @@
               const fillRatio = bboxArea > 0 ? count / bboxArea : 0;
               const aspectRatio = Math.max(bw, bh) / Math.max(1, Math.min(bw, bh));
               const isCircularBlob = fillRatio > 0.55 && aspectRatio < 1.8;
-              regions.push({ area: count, meanHue, isMagenta, isCircularBlob });
+              const isBackground = edgesTouched >= 2 && bboxArea > totalPixels * 0.12;
+              if (!isBackground) {
+                regions.push({ area: count, meanHue, isMagenta, isCircularBlob });
+              }
             }
           }
         }
 
 
-        const circularBlobs = regions.filter(r => r.area > largeRegionPixels && r.isCircularBlob).length;
-        const magentaRegions = regions.filter(r => r.isMagenta).length;
+        const allCircularCandidates = regions.filter(r => r.isCircularBlob).length;
+        const looksLikeGridOrDocument = allCircularCandidates > 5;
+
+
+        const circularBlobs = looksLikeGridOrDocument ? 0 : regions.filter(r => r.area > largeRegionPixels && r.isCircularBlob).length;
+        const magentaRegions = looksLikeGridOrDocument ? 0 : regions.filter(r => r.isMagenta).length;
 
 
         let score = 0;
-        if (circularBlobs >= 1) score += 0.3;   // one round halo
-        if (circularBlobs >= 2) score += 0.3;   // chain of halos (classic anamorphic flare)
-        if (magentaRegions >= 1) score += 0.4;  // chromatic/color-fringed cast, strong flare signal
+        if (circularBlobs >= 1) score += 0.3;
+        if (circularBlobs >= 2) score += 0.3;
+        if (magentaRegions >= 1) score += 0.4;
         score = Math.min(score, 1);
 
 
@@ -421,29 +665,12 @@
       }
 
 
-      // Clean label
-      // FIX: MobileNet often returns comma-separated synonyms, e.g.
-      // "hand-held computer, hand-held microcomputer". The old version turned
-      // commas into underscores instead of dropping them, producing duplicated
-      // words like "handheld_computer_handheld_microcomputer". Now we only
-      // keep the first synonym.
       function cleanLabel(label) {
         const first = label.split(',')[0];
         return first.replace(/\(.*?\)/g, '').trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
       }
 
 
-      // FIX: detectFlare and OCR were running on the FULL native resolution
-      // canvas. On a real phone photo (3000-4000px wide, 10-12+ megapixels),
-      // getImageData() pulls tens of millions of pixels into JS and the
-      // per-pixel HSV conversion + flood-fill loop runs on all of them —
-      // this can take from tens of seconds to several minutes per image on
-      // mobile, which looks like the app is frozen/stuck even though it's
-      // just slowly computing. Classification already used a small 224x224
-      // canvas; flare detection and OCR now get similarly downscaled
-      // working copies (flare detection doesn't need full resolution to
-      // find bright blobs, and OCR text is still legible well below native
-      // camera resolution).
       function scaleCanvas(sourceCanvas, maxDim) {
         const { width, height } = sourceCanvas;
         if (width <= maxDim && height <= maxDim) return sourceCanvas;
@@ -458,12 +685,6 @@
       }
 
 
-      // FIX: if a single image's OCR call hangs (e.g. a network fetch stalling
-      // because the device is offline, or any other unexpected stall inside
-      // Tesseract.js), the whole batch used to freeze forever on that image
-      // with no way to recover short of reloading the page. This races the
-      // OCR call against a timeout so processing can skip the problem image
-      // and continue instead of hanging indefinitely.
       function withTimeout(promise, ms, label) {
         return Promise.race([
           promise,
@@ -472,7 +693,6 @@
       }
 
 
-      // Decode image using <img> element (more compatible than createImageBitmap on mobile)
       function decodeImage(file) {
         return new Promise((resolve, reject) => {
           const img = new Image();
@@ -492,20 +712,13 @@
         });
       }
 
-      // Full per-image pipeline: decode -> flare detection -> classification -> OCR -> naming.
-      // Extracted into its own function so the caller can race it against a single
-      // overall timeout (see withTimeout usage in processImages).
-      // FIX: onStage lets the caller show exactly which step is running, so a
-      // hang shows up as a stuck stage label (e.g. "Decoding...") instead of a
-      // generic "Processing X/Y" that gives no diagnostic information.
+
       async function processOneImage(img, ext, addFlare, useOcr, flareThresh, counters, onStage) {
-        onStage && onStage('Decoding image...');
-        // Decode image (Image element avoids createImageBitmap hang on some mobile browsers)
+        onStage && onStage(t('stage_decode'));
         const canvas = await decodeImage(img.file);
 
 
-        onStage && onStage('Detecting flare...');
-        // 1. Flare detection (on a downscaled copy — see scaleCanvas note above)
+        onStage && onStage(t('stage_flare'));
         const flareCanvas = scaleCanvas(canvas, 700);
         const flareCtx = flareCanvas.getContext('2d');
         const fullImgData = flareCtx.getImageData(0, 0, flareCanvas.width, flareCanvas.height);
@@ -513,8 +726,7 @@
         if (flareCanvas !== canvas) { flareCanvas.width = 0; flareCanvas.height = 0; }
 
 
-        onStage && onStage('Classifying (AI)...');
-        // 2. AI Classification (resize to 224x224)
+        onStage && onStage(t('stage_classify'));
         const smallCanvas = document.createElement('canvas');
         smallCanvas.width = 224;
         smallCanvas.height = 224;
@@ -530,16 +742,10 @@
         const confidence = topPred.probability;
 
 
-        // 3. OCR
-        // FIX: ocrConfidence used to be scoped *inside* the `if (text.length > 0)`
-        // block and was never used for anything (dead code: an `ocrKeyword`
-        // was computed and then thrown away). It's now lifted to the outer
-        // scope so step 4 can actually use it to judge whether OCR found
-        // real text vs. noise.
         let detectedText = null;
         let ocrConfidence = 0;
         if (useOcr) {
-          onStage && onStage('Running OCR...');
+          onStage && onStage(t('stage_ocr'));
           try {
             const ocrCanvas = scaleCanvas(canvas, 1200);
             const ocrResult = await ocrWorker.recognize(ocrCanvas);
@@ -550,22 +756,12 @@
               detectedText = text.substring(0, 100);
             }
           } catch (e) {
-            // OCR failed silently
           }
         }
         canvas.width = 0;
         canvas.height = 0;
 
 
-        // 4. Determine keyword
-        // FIX: previously triggered "document" whenever MobileNet's
-        // confidence was < 0.3 AND any OCR text (even 1-2 noisy chars)
-        // was found. MobileNet confidence < 0.3 is common and meaningless
-        // for subjects outside ImageNet's 1000 classes (logos, clothing,
-        // app icons...), so normal photos were getting relabeled as
-        // "document". Now it requires OCR to have found a reasonable
-        // amount of text (>=8 non-whitespace chars) at decent confidence
-        // (>60), regardless of what the classifier thinks the image is.
         let finalKeyword = keyword;
         const meaningfulText = detectedText ? detectedText.replace(/\s+/g, '') : '';
         if (useOcr && meaningfulText.length >= 8 && ocrConfidence > 60) {
@@ -573,7 +769,6 @@
         }
 
 
-        // 5. Generate new name
         const count = (counters[finalKeyword] || 0) + 1;
         counters[finalKeyword] = count;
         let newName = `${finalKeyword}_${String(count).padStart(3, '0')}.${ext}`;
@@ -599,6 +794,83 @@
       }
 
 
+      // ============================================================
+      // ZIP export of renamed images (JSZip)
+      // ============================================================
+      async function buildZip(results) {
+        const zip = new JSZip();
+        const usedNames = new Set();
+        for (let i = 0; i < results.length; i++) {
+          const r = results[i];
+          const img = images[i];
+          if (!r || r.error || !r.newName || !img) continue;
+          let name = r.newName;
+          let n = 1;
+          while (usedNames.has(name)) {
+            const dot = r.newName.lastIndexOf('.');
+            name = dot > -1 ? `${r.newName.slice(0, dot)}_${n}${r.newName.slice(dot)}` : `${r.newName}_${n}`;
+            n++;
+          }
+          usedNames.add(name);
+          zip.file(name, img.file);
+        }
+        return zip.generateAsync({ type: 'blob' });
+      }
+
+
+      function renderSummary(results, addFlare) {
+        lastResults = results;
+        lastAddFlare = addFlare;
+        const total = results.length;
+        const renamedCount = results.filter(r => r.renamed).length;
+        const flareCount = results.filter(r => r.hasFlare).length;
+        const errorCount = results.filter(r => r.error).length;
+
+
+        summary.classList.add('active');
+        statTotal.textContent = total;
+        statRenamed.textContent = renamedCount;
+        statFlare.textContent = flareCount;
+        statErrors.textContent = errorCount;
+        summaryNote.textContent = t('naming_scheme', addFlare);
+
+
+        const downloadActions = document.getElementById('downloadActions');
+        downloadActions.innerHTML = '';
+
+
+        // CSV button
+        let csv = 'Original Name,New Name,Keyword,Confidence,Flare,Flare Score,OCR Text\n';
+        for (const r of results) {
+          csv += `"${r.originalName}","${r.newName || ''}","${r.keyword}",${r.confidence.toFixed(3)},${r.hasFlare},${r.flareScore.toFixed(3)},"${(r.detectedText || '').replace(/"/g,'""')}"\n`;
+        }
+        const csvBlob = new Blob([csv], { type: 'text/csv' });
+        const csvLink = document.createElement('a');
+        csvLink.href = URL.createObjectURL(csvBlob);
+        csvLink.download = 'picpulse-results.csv';
+        csvLink.className = 'download-btn';
+        csvLink.innerHTML = `📄 <span>${t('download_csv')}</span>`;
+        downloadActions.appendChild(csvLink);
+
+
+        // ZIP button
+        const zipLink = document.createElement('a');
+        zipLink.className = 'download-btn is-loading';
+        zipLink.href = '#';
+        zipLink.innerHTML = `🗜️ <span>${t('download_zip')}…</span>`;
+        downloadActions.appendChild(zipLink);
+        buildZip(results).then(blob => {
+          zipLink.href = URL.createObjectURL(blob);
+          zipLink.download = 'picpulse-renamed-images.zip';
+          zipLink.innerHTML = `🗜️ <span>${t('download_zip')}</span>`;
+          zipLink.classList.remove('is-loading');
+        }).catch(err => {
+          console.error('ZIP build failed', err);
+          zipLink.remove();
+        });
+      }
+
+
       // Process all images
       async function processImages() {
         if (isProcessing || !images.length) return;
@@ -613,30 +885,30 @@
         const addFlare = optFlareTag.checked;
         const useOcr = optOcr.checked;
         const flareThresh = parseFloat(flareThreshold.value);
+
+
+        if (useOcr) {
+          const wantLangs = optOcrExtra.checked ? 'eng+fra+ara+spa' : 'eng+fra';
+          if (wantLangs !== currentOcrLangs) {
+            progressText.textContent = t('ocr_loading');
+            await loadOcr(wantLangs);
+          }
+        }
+
+
         const counters = {};
         const results = [];
         let total = images.length;
-        let renamedCount = 0;
-        let flareCount = 0;
-        let errorCount = 0;
 
 
         for (let i = 0; i < images.length; i++) {
           const img = images[i];
           const ext = img.file.name.split('.').pop().toLowerCase();
           progressFill.style.width = `${((i) / total * 100)}%`;
-          progressText.innerHTML = `<span class="loading"></span> Processing ${i + 1}/${total}: ${escapeHtml(img.file.name)}`;
+          progressText.innerHTML = `<span class="loading"></span> ${i + 1}/${total}: ${escapeHtml(img.file.name)}`;
 
 
           try {
-            // FIX: the entire per-image pipeline (decode -> flare -> classify -> OCR)
-            // is now raced against one outer timeout. Previously only the
-            // classify/OCR steps had timeouts; createImageBitmap() — the very
-            // first async step — had none, and some mobile browsers are known
-            // to leave that promise pending forever instead of rejecting on
-            // certain images, which froze the whole batch with no way to
-            // recover. Now, no matter which step actually stalls, the batch
-            // moves on to the next image after 30s.
             const result = await withTimeout(
               processOneImage(img, ext, addFlare, useOcr, flareThresh, counters, (stage) => {
                 progressText.innerHTML = `<span class="loading"></span> ${i + 1}/${total}: ${escapeHtml(img.file.name)} — ${escapeHtml(stage)}`;
@@ -644,58 +916,27 @@
               30000,
               'Image processing'
             );
-            if (result.renamed) renamedCount++;
-            if (result.hasFlare) flareCount++;
             img.results = result;
             results.push(result);
           } catch (e) {
-            errorCount++;
             const result = { originalName: img.file.name, newName: null, keyword: 'error', confidence: 0, hasFlare: false, flareScore: 0, detectedText: null, renamed: false, error: e.message };
             img.results = result;
             results.push(result);
           }
 
 
-          // Add/update card
           const card = document.createElement('div');
           card.className = 'card';
-          card.innerHTML = `
-            <img class="card-img" src="${img.url}" alt="${escapeHtml(img.file.name)}">
-            <div class="card-body">
-              <div class="card-title">${escapeHtml(img.file.name)}</div>
-              <div class="card-subtitle">${formatResultLine(img.results)}</div>
-            </div>
-          `;
+          card.innerHTML = buildCardHtml(img.file.name, img.url, img.results);
           gallery.appendChild(card);
         }
 
 
         progressFill.style.width = '100%';
-        progressText.textContent = `Done! ${total} images processed.`;
+        progressText.textContent = t('progress_done', total);
 
 
-        // Show summary
-        summary.classList.add('active');
-        statTotal.textContent = total;
-        statRenamed.textContent = renamedCount;
-        statFlare.textContent = flareCount;
-        statErrors.textContent = errorCount;
-        summaryNote.textContent = `Naming scheme: [keyword]_[counter].ext ${addFlare ? '· flare_ prefix when detected' : ''}`;
-
-
-        // Download results as CSV
-        let csv = 'Original Name,New Name,Keyword,Confidence,Flare,Flare Score,OCR Text\n';
-        for (const r of results) {
-          csv += `"${r.originalName}","${r.newName || ''}","${r.keyword}",${r.confidence.toFixed(3)},${r.hasFlare},${r.flareScore.toFixed(3)},"${r.detectedText || ''}"\n`;
-        }
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = 'picpulse-results.csv';
-        link.textContent = 'Download CSV Results';
-        link.style.cssText = 'display:inline-block;margin-top:0.5rem;color:#a855f7;font-size:0.85rem;';
-        document.getElementById('summaryNote').appendChild(document.createElement('br'));
-        document.getElementById('summaryNote').appendChild(link);
+        renderSummary(results, addFlare);
 
 
         isProcessing = false;
@@ -710,17 +951,19 @@
       btnClear.addEventListener('click', () => {
         if (isProcessing) return;
         images = [];
+        lastResults = null;
         gallery.innerHTML = '';
         summary.classList.remove('active');
         progressSection.classList.remove('active');
         progressFill.style.width = '0%';
-        progressText.textContent = 'Ready';
+        progressText.textContent = t('progress_ready');
         updateGallery();
       });
 
 
+      applyLanguage('fr');
       loadModel();
-      loadOcr();
+      loadOcr('eng+fra');
     })();
   </script>
 </body>
