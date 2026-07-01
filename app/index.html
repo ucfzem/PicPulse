@@ -819,7 +819,8 @@
           try {
             visionLabel = await withTimeout(callOpenRouterVision(canvas), 25000, 'Vision API');
           } catch (e) {
-            console.warn('Vision API failed:', e.message);
+            onStage && onStage(t('stage_vision') + ' — ' + e.message.slice(0, 60));
+            await new Promise(r => setTimeout(r, 800));
           }
         } else if (useVision && confidence >= 0.3) {
           onStage && onStage(t('stage_vision_skip'));
