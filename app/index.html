@@ -176,6 +176,17 @@
 
 
 
+    <div class="vision-section" style="margin:-0.5rem 0 1rem;padding:0.75rem 1rem;background:var(--card);border:1px dashed var(--border);border-radius:10px;">
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+        <label class="opt-check" style="flex:1;min-width:200px;">
+          <span style="color:var(--text-muted);font-size:0.8rem;">OpenRouter Key</span>
+          <input type="password" id="visionKey" placeholder="sk-or-v1-..." style="display:block;width:100%;margin-top:0.2rem;padding:0.35rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:monospace;font-size:0.8rem;" spellcheck="false">
+        </label>
+        <label class="opt-check"><input type="checkbox" id="optVision"> <span id="optVisionLabel">AI Vision for bad labels (uses API quota)</span></label>
+      </div>
+    </div>
+
+
     <div class="actions">
       <button class="btn btn-primary" id="btnProcess" disabled>Process Images</button>
       <button class="btn btn-secondary" id="btnClear">Clear All</button>
@@ -241,6 +252,9 @@
           drop_title: "Drop images here", drop_or: " or click to browse", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
           drop_has_images: n => `📁 ${n} images`, drop_add_more: "Click to add more images",
           opt_flare: "Add flare_ tag", opt_ocr: "OCR (text detection)", opt_ocr_extra: "Extra languages (Arabic, Spanish) — slower", opt_threshold: "Flare threshold",
+          opt_vision: "AI Vision for bad labels (uses API quota)", vision_key_placeholder: "OpenRouter API key (sk-or-v1-...)",
+          stage_vision: "AI Vision analysis...", stage_vision_skip: "AI Vision skipped (good label)",
+          vision_error: "Vision API:", vision_no_key: "No API key set",
           btn_process: "Process Images", btn_clear: "Clear All",
           progress_ready: "Ready",
           stage_decode: "Decoding image...", stage_flare: "Detecting flare...", stage_classify: "Classifying (AI)...", stage_ocr: "Running OCR...",
@@ -262,6 +276,9 @@
           drop_title: "Déposez vos images ici", drop_or: " ou cliquez pour parcourir", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
           drop_has_images: n => `📁 ${n} images`, drop_add_more: "Cliquez pour ajouter d'autres images",
           opt_flare: "Ajouter le tag flare_", opt_ocr: "OCR (détection de texte)", opt_ocr_extra: "Langues supplémentaires (arabe, espagnol) — plus lent", opt_threshold: "Seuil de reflet",
+          opt_vision: "Vision IA pour les mauvais labels (utilise le quota API)", vision_key_placeholder: "Clé API OpenRouter (sk-or-v1-...)",
+          stage_vision: "Analyse Vision IA...", stage_vision_skip: "Vision IA ignorée (bon label)",
+          vision_error: "API Vision :", vision_no_key: "Aucune clé API",
           btn_process: "Traiter les images", btn_clear: "Tout effacer",
           progress_ready: "Prêt",
           stage_decode: "Décodage de l'image...", stage_flare: "Détection des reflets...", stage_classify: "Classification (IA)...", stage_ocr: "OCR en cours...",
@@ -283,6 +300,9 @@
           drop_title: "Suelta tus imágenes aquí", drop_or: " o haz clic para explorar", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
           drop_has_images: n => `📁 ${n} imágenes`, drop_add_more: "Haz clic para añadir más imágenes",
           opt_flare: "Añadir etiqueta flare_", opt_ocr: "OCR (detección de texto)", opt_ocr_extra: "Idiomas adicionales (árabe, español) — más lento", opt_threshold: "Umbral de destello",
+          opt_vision: "Visión IA para etiquetas incorrectas (usa cuota API)", vision_key_placeholder: "Clave API OpenRouter (sk-or-v1-...)",
+          stage_vision: "Análisis de Visión IA...", stage_vision_skip: "Visión IA omitida (buena etiqueta)",
+          vision_error: "API Visión:", vision_no_key: "Sin clave API",
           btn_process: "Procesar imágenes", btn_clear: "Borrar todo",
           progress_ready: "Listo",
           stage_decode: "Decodificando imagen...", stage_flare: "Detectando destellos...", stage_classify: "Clasificando (IA)...", stage_ocr: "Ejecutando OCR...",
@@ -304,6 +324,9 @@
           drop_title: "أفلت الصور هنا", drop_or: " أو انقر للتصفح", drop_formats: "JPEG, PNG, GIF, BMP, WEBP",
           drop_has_images: n => `📁 ${n} صورة`, drop_add_more: "انقر لإضافة المزيد من الصور",
           opt_flare: "إضافة وسم flare_", opt_ocr: "التعرف الضوئي على النص (OCR)", opt_ocr_extra: "لغات إضافية (العربية، الإسبانية) — أبطأ", opt_threshold: "عتبة الوهج",
+          opt_vision: "الرؤية الذكية للتسميات الخاطئة (تستخدم حصة API)", vision_key_placeholder: "مفتاح API OpenRouter (sk-or-v1-...)",
+          stage_vision: "تحليل الرؤية الذكية...", stage_vision_skip: "تم تخطي الرؤية الذكية (تسمية جيدة)",
+          vision_error: "API الرؤية:", vision_no_key: "لا يوجد مفتاح API",
           btn_process: "معالجة الصور", btn_clear: "مسح الكل",
           progress_ready: "جاهز",
           stage_decode: "جارٍ فك تشفير الصورة...", stage_flare: "جارٍ كشف الوهج...", stage_classify: "جارٍ التصنيف (ذكاء اصطناعي)...", stage_ocr: "جارٍ التعرف الضوئي على النص...",
@@ -348,6 +371,8 @@
       const statFlare = document.getElementById('statFlare');
       const statErrors = document.getElementById('statErrors');
       const summaryNote = document.getElementById('summaryNote');
+      const optVision = document.getElementById('optVision');
+      const visionKey = document.getElementById('visionKey');
 
 
       let images = [];
@@ -358,6 +383,15 @@
       let isProcessing = false;
       let lastResults = null;
       let lastAddFlare = true;
+
+
+      // Load saved API key
+      if (localStorage.getItem('picpulse-vision-key')) {
+        visionKey.value = localStorage.getItem('picpulse-vision-key');
+      }
+      visionKey.addEventListener('input', () => {
+        localStorage.setItem('picpulse-vision-key', visionKey.value);
+      });
 
 
       // ============================================================
@@ -389,6 +423,8 @@
         document.getElementById('optFlareLabel').textContent = t('opt_flare');
         document.getElementById('optOcrLabel').textContent = t('opt_ocr');
         document.getElementById('optOcrExtraLabel').textContent = t('opt_ocr_extra');
+        document.getElementById('optVisionLabel').textContent = t('opt_vision');
+        visionKey.placeholder = t('vision_key_placeholder');
         document.getElementById('optThresholdLabel').textContent = t('opt_threshold');
         btnProcess.textContent = t('btn_process');
         btnClear.textContent = t('btn_clear');
@@ -514,6 +550,38 @@
 
 
       function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+
+      // ============================================================
+      // OpenRouter Vision API (gemini-2.5-flash)
+      // ============================================================
+      async function callOpenRouterVision(canvas) {
+        const key = visionKey.value.trim();
+        if (!key) throw new Error(t('vision_no_key'));
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-preview-04-17',
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Describe this image in one or two English words. Return only the words, lowercase, no punctuation, no explanation. Focus on the main subject.' },
+                { type: 'image_url', image_url: { url: dataUrl } }
+              ]
+            }],
+            max_tokens: 20
+          })
+        });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`${t('vision_error')} ${res.status} ${errText}`);
+        }
+        const data = await res.json();
+        const label = (data.choices?.[0]?.message?.content || '').trim().toLowerCase().replace(/[^a-z0-9_ ]/g, '').trim().replace(/\s+/g, '_');
+        return label || 'unknown';
+      }
 
 
       // Load MobileNet
@@ -713,7 +781,7 @@
       }
 
 
-      async function processOneImage(img, ext, addFlare, useOcr, flareThresh, counters, onStage) {
+      async function processOneImage(img, ext, addFlare, useOcr, useVision, flareThresh, counters, onStage) {
         onStage && onStage(t('stage_decode'));
         const canvas = await decodeImage(img.file);
 
@@ -742,6 +810,20 @@
         const confidence = topPred.probability;
 
 
+        // Vision API: override MobileNet label when confidence is low
+        let visionLabel = null;
+        if (useVision && confidence < 0.3) {
+          onStage && onStage(t('stage_vision'));
+          try {
+            visionLabel = await withTimeout(callOpenRouterVision(canvas), 25000, 'Vision API');
+          } catch (e) {
+            console.warn('Vision API failed:', e.message);
+          }
+        } else if (useVision && confidence >= 0.3) {
+          onStage && onStage(t('stage_vision_skip'));
+        }
+
+
         let detectedText = null;
         let ocrConfidence = 0;
         if (useOcr) {
@@ -763,6 +845,9 @@
 
 
         let finalKeyword = keyword;
+        if (visionLabel && visionLabel !== 'unknown') {
+          finalKeyword = visionLabel;
+        }
         const meaningfulText = detectedText ? detectedText.replace(/\s+/g, '') : '';
         if (useOcr && meaningfulText.length >= 8 && ocrConfidence > 60) {
           finalKeyword = 'document';
@@ -884,6 +969,7 @@
 
         const addFlare = optFlareTag.checked;
         const useOcr = optOcr.checked;
+        const useVision = optVision.checked;
         const flareThresh = parseFloat(flareThreshold.value);
 
 
@@ -909,11 +995,12 @@
 
 
           try {
+            const timeout = useVision ? 70000 : 30000;
             const result = await withTimeout(
-              processOneImage(img, ext, addFlare, useOcr, flareThresh, counters, (stage) => {
+              processOneImage(img, ext, addFlare, useOcr, useVision, flareThresh, counters, (stage) => {
                 progressText.innerHTML = `<span class="loading"></span> ${i + 1}/${total}: ${escapeHtml(img.file.name)} — ${escapeHtml(stage)}`;
               }),
-              30000,
+              timeout,
               'Image processing'
             );
             img.results = result;
